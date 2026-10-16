@@ -1402,32 +1402,6 @@ const resetCouncilDelayed = (agents = [], delayMs = 2000) => {
   });
 };
 
-const createThoughtBlock = (initialText = "", isStreaming = false) => {
-  const block = document.createElement("div");
-  block.className = "agent-thought-block";
-  block.innerHTML = `
-    <div class="agent-thought-header" title="Click to collapse / expand">
-      <span class="thought-badge">💭 ${isStreaming ? "Reasoning" : "Thought Process"}</span>
-      ${isStreaming ? '<span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>' : ""}
-      <span class="thought-toggle-hint">Click to collapse</span>
-    </div>
-    <div class="agent-thought-body"></div>
-  `;
-  const bodyEl = block.querySelector(".agent-thought-body");
-  if (bodyEl && initialText) {
-    bodyEl.textContent = initialText;
-  }
-  const header = block.querySelector(".agent-thought-header");
-  header.addEventListener("click", () => {
-    block.classList.toggle("collapsed");
-    const hint = block.querySelector(".thought-toggle-hint");
-    if (hint) {
-      hint.textContent = block.classList.contains("collapsed") ? "Click to expand" : "Click to collapse";
-    }
-  });
-  return block;
-};
-
 const upsertAgentStreamMessage = (payload) => {
   const name = payload.agent || "Council";
   const roundId = normalizeRoundId(payload.round);
@@ -1469,32 +1443,42 @@ const upsertAgentStreamMessage = (payload) => {
 
     if (eventType === "start") {
       entry.classList.add("loading");
-      entry.innerHTML = `<span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+      entry.innerHTML = `<div class="thinking-banner"><span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span></div>`;
     } else if (eventType === "reasoning_delta") {
-      entry.classList.remove("loading");
-      if (entry.querySelector(".thinking-text")) {
-        entry.innerHTML = "";
+      // Keep the thinking animation at top, stream text directly below it
+      let banner = entry.querySelector(".thinking-banner");
+      if (!banner) {
+        banner = document.createElement("div");
+        banner.className = "thinking-banner";
+        banner.innerHTML = `<span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+        entry.prepend(banner);
       }
-      let thoughtBlock = entry.querySelector(".agent-thought-block");
-      if (!thoughtBlock) {
-        thoughtBlock = createThoughtBlock("", true);
-        entry.prepend(thoughtBlock);
+      let reasonEl = entry.querySelector(".reasoning-stream-text");
+      if (!reasonEl) {
+        reasonEl = document.createElement("div");
+        reasonEl.className = "reasoning-stream-text";
+        entry.appendChild(reasonEl);
       }
-      const bodyEl = thoughtBlock.querySelector(".agent-thought-body");
-      if (bodyEl && payload.delta) {
-        bodyEl.textContent += payload.delta;
-        bodyEl.scrollTop = bodyEl.scrollHeight;
+      if (payload.delta) {
+        reasonEl.textContent += payload.delta;
+        reasonEl.scrollTop = reasonEl.scrollHeight;
       }
     } else if (eventType === "delta") {
+      // When speech begins, remove the thinking animation line immediately
       entry.classList.remove("loading");
-      const thoughtBlock = entry.querySelector(".agent-thought-block");
-      if (thoughtBlock) {
-        const badge = thoughtBlock.querySelector(".thought-badge");
-        if (badge) badge.innerHTML = "💭 Thought Process";
-        const dots = thoughtBlock.querySelector(".thinking-dots");
-        if (dots) dots.remove();
-      } else if (entry.querySelector(".thinking-text")) {
-        entry.innerHTML = "";
+      const banner = entry.querySelector(".thinking-banner");
+      if (banner) {
+        banner.remove();
+      }
+      const legacyThinking = entry.querySelector(".thinking-text");
+      if (legacyThinking && legacyThinking.parentElement && legacyThinking.parentElement !== entry) {
+        legacyThinking.parentElement.remove();
+      }
+
+      // If reasoning text was streamed, mark it completed
+      const reasonEl = entry.querySelector(".reasoning-stream-text");
+      if (reasonEl) {
+        reasonEl.classList.add("reasoning-completed");
       }
 
       let speechBody = entry.querySelector(".agent-speech-text");
@@ -1512,13 +1496,14 @@ const upsertAgentStreamMessage = (payload) => {
       speechList.querySelectorAll(".agent-speech.loading").forEach((el) => {
         if (el !== entry) el.remove();
       });
-      const thoughtBlock = entry.querySelector(".agent-thought-block");
-      if (thoughtBlock) {
-        const badge = thoughtBlock.querySelector(".thought-badge");
-        if (badge) badge.innerHTML = "💭 Thought Process";
-        const dots = thoughtBlock.querySelector(".thinking-dots");
-        if (dots) dots.remove();
+      const banner = entry.querySelector(".thinking-banner");
+      if (banner) banner.remove();
+
+      const reasonEl = entry.querySelector(".reasoning-stream-text");
+      if (reasonEl) {
+        reasonEl.classList.add("reasoning-completed");
       }
+
       let speechBody = entry.querySelector(".agent-speech-text");
       if (speechBody) {
         speechBody.textContent = `${roundLabel}${payload.message || ""}`;
@@ -1587,28 +1572,23 @@ const upsertAgentMessage = (payload) => {
     speechList.querySelectorAll(".agent-speech.loading").forEach((el) => {
       if (el !== entry) el.remove();
     });
+    const banner = entry.querySelector(".thinking-banner");
+    if (banner) banner.remove();
 
-    let thoughtBlock = entry.querySelector(".agent-thought-block");
-    if (!thoughtBlock && payload.reasoning && payload.reasoning.trim()) {
-      thoughtBlock = createThoughtBlock(payload.reasoning.trim(), false);
-      entry.prepend(thoughtBlock);
-    } else if (thoughtBlock) {
-      const badge = thoughtBlock.querySelector(".thought-badge");
-      if (badge) badge.innerHTML = "💭 Thought Process";
-      const dots = thoughtBlock.querySelector(".thinking-dots");
-      if (dots) dots.remove();
-      if (payload.reasoning && payload.reasoning.trim()) {
-        const bodyEl = thoughtBlock.querySelector(".agent-thought-body");
-        if (bodyEl && !bodyEl.textContent.trim()) {
-          bodyEl.textContent = payload.reasoning.trim();
-        }
-      }
+    let reasonEl = entry.querySelector(".reasoning-stream-text");
+    if (!reasonEl && payload.reasoning && payload.reasoning.trim()) {
+      reasonEl = document.createElement("div");
+      reasonEl.className = "reasoning-stream-text reasoning-completed";
+      reasonEl.textContent = payload.reasoning.trim();
+      entry.prepend(reasonEl);
+    } else if (reasonEl) {
+      reasonEl.classList.add("reasoning-completed");
     }
 
     let speechBody = entry.querySelector(".agent-speech-text");
     if (speechBody) {
       speechBody.textContent = `${roundLabel}${payload.message || ""}`;
-    } else if (thoughtBlock) {
+    } else if (reasonEl) {
       speechBody = document.createElement("div");
       speechBody.className = "agent-speech-text";
       speechBody.textContent = `${roundLabel}${payload.message || ""}`;
