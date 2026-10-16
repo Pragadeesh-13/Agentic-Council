@@ -31,8 +31,15 @@ def extract_id_token(req: Request) -> Optional[str]:
 
 
 class SessionGuard:
-    def __init__(self, mode: str = "optional"):
-        self.mode = mode.lower()
+    def __init__(self, mode: Optional[str] = None):
+        self._mode = mode.lower() if mode else None
+
+    @property
+    def mode(self) -> str:
+        if self._mode is not None:
+            return self._mode
+        from app.config import settings
+        return getattr(settings, "auth_mode", "optional").lower()
 
     def is_protected_path(self, path: str) -> bool:
         if path in PUBLIC_API_PATHS:

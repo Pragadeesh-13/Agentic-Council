@@ -70,3 +70,26 @@ def test_static_index_serving():
     assert res.status_code == 200
     assert "AGENTIC COUNCIL" in res.text
     assert "india-map" in res.text
+
+
+def test_auth_required_redirect():
+    from app.config import settings
+    orig_mode = settings.auth_mode
+    try:
+        settings.auth_mode = "required"
+        fresh_client = TestClient(app)
+        # Unauthenticated request to / should redirect to /login.html
+        res = fresh_client.get("/", follow_redirects=False)
+        assert res.status_code == 302
+        assert res.headers["location"] == "/login.html"
+
+        # Login page itself should be accessible without redirect loop
+        res_login = fresh_client.get("/login.html", follow_redirects=False)
+        assert res_login.status_code == 200
+
+        # Authenticated request with cookie should serve index.html
+        res_auth = fresh_client.get("/", cookies={"__session": "token_alice"}, follow_redirects=False)
+        assert res_auth.status_code == 200
+        assert "AGENTIC COUNCIL" in res_auth.text
+    finally:
+        settings.auth_mode = orig_mode

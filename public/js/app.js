@@ -2399,8 +2399,15 @@ const initProviderConfig = () => {
 
   if (!restored) {
     fetch("/api/config", { headers: authHeaders() })
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 401) {
+          window.location.href = "login.html";
+          return null;
+        }
+        return r.json();
+      })
       .then((cfg) => {
+        if (!cfg) return;
         if (cfg.provider && PROVIDERS[cfg.provider]) {
           providerSelect.value = cfg.provider;
         }

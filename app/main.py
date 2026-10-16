@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, Request, Response, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -428,15 +428,34 @@ PUBLIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 
 if os.path.isdir(PUBLIC_DIR):
     @app.get("/")
-    async def serve_index():
+    @app.get("/index.html")
+    async def serve_index(request: Request):
+        if settings.auth_mode == "required":
+            auth_res = await guard.authenticate(request)
+            if not auth_res.get("ok") or not auth_res.get("user"):
+                return RedirectResponse(url="/login.html", status_code=302)
         return FileResponse(os.path.join(PUBLIC_DIR, "index.html"))
 
     @app.get("/login.html")
-    async def serve_login():
+    async def serve_login(request: Request):
+        if settings.auth_mode == "required":
+            auth_res = await guard.authenticate(request)
+            if auth_res.get("ok") and auth_res.get("user"):
+                return RedirectResponse(url="/", status_code=302)
         return FileResponse(os.path.join(PUBLIC_DIR, "login.html"))
 
     @app.get("/signup.html")
-    async def serve_signup():
+    async def serve_signup(request: Request):
+        if settings.auth_mode == "required":
+            auth_res = await guard.authenticate(request)
+            if auth_res.get("ok") and auth_res.get("user"):
+                return RedirectResponse(url="/", status_code=302)
         return FileResponse(os.path.join(PUBLIC_DIR, "signup.html"))
+
+    @app.get("/logout")
+    async def logout():
+        response = RedirectResponse(url="/login.html", status_code=302)
+        response.delete_cookie(key="__session", path="/")
+        return response
 
     app.mount("/", StaticFiles(directory=PUBLIC_DIR, html=True), name="public")
