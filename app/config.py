@@ -57,7 +57,11 @@ class Settings(BaseModel):
     llm_stream_idle_timeout_ms: int = Field(
         default_factory=lambda: int(os.getenv("LLM_STREAM_IDLE_TIMEOUT_MS", "90000"))
     )
-    key_encryption_secret: str = Field(default_factory=lambda: os.getenv("KEY_ENCRYPTION_SECRET", ""))
+    key_encryption_secret: str = Field(
+        default_factory=lambda: os.getenv(
+            "KEY_ENCRYPTION_SECRET", "6c407159a54cc53fe814dda34fd67f8dc74dedb0830c0d99a5a539b73e524eb6"
+        )
+    )
     firebase_project_id: str = Field(default_factory=lambda: os.getenv("FIREBASE_PROJECT_ID", "llm-council-4da2d"))
     firebase_web_api_key: str = Field(
         default_factory=lambda: os.getenv("FIREBASE_WEB_API_KEY", "AIzaSyDIwGeB4nnmpb2Ufhh8AMNvw0OKFYi67gQ")
