@@ -16,7 +16,7 @@ def build_title_prompt(text: str) -> Tuple[List[Dict[str, str]], int]:
             "content": f"Policy details:\n{policy_text}\n\nTitle:",
         },
     ]
-    return messages, 20
+    return messages, 4096
 
 
 def build_summary_prompt(text: str) -> Tuple[List[Dict[str, str]], int]:
@@ -36,4 +36,4 @@ def build_summary_prompt(text: str) -> Tuple[List[Dict[str, str]], int]:
             "content": f"Policy:\n{policy_text}\n\nSummary:",
         },
     ]
-    return messages, 90
+    return messages, 4096

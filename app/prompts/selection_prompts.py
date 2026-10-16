@@ -31,7 +31,7 @@ def build_selection_prompt(
             ),
         },
     ]
-    return messages, 200
+    return messages, 4096
 
 
 def build_rebuttal_selection_prompt(
@@ -87,7 +87,7 @@ def build_rebuttal_selection_prompt(
             ),
         },
     ]
-    return messages, 150
+    return messages, 4096
 
 
 def build_reply_selection_prompt(
@@ -134,4 +134,4 @@ def build_reply_selection_prompt(
             ),
         },
     ]
-    return messages, 100
+    return messages, 4096

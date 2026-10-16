@@ -15,7 +15,7 @@ ANTHROPIC_MODELS = [
 
 def format_anthropic_payload(
     messages: List[Dict[str, str]],
-    max_tokens: int = 250,
+    max_tokens: int = 4096,
     model: str = "claude-3-5-sonnet-20241022",
 ) -> Dict[str, Any]:
     system_prompt = ""
@@ -37,7 +37,7 @@ def format_anthropic_payload(
 
     payload: Dict[str, Any] = {
         "model": model,
-        "max_tokens": max_tokens,
+        "max_tokens": max(max_tokens or 4096, 4096),
         "messages": anthropic_messages,
     }
     if system_prompt:
@@ -74,7 +74,7 @@ class AnthropicDriver(BaseLlmDriver):
     async def complete(
         self,
         messages: List[Dict[str, str]],
-        max_tokens: int = 250,
+        max_tokens: int = 4096,
         **options: Any,
     ) -> str:
         endpoint = f"{self.base_url}/v1/messages"
@@ -97,7 +97,7 @@ class AnthropicDriver(BaseLlmDriver):
     async def stream(
         self,
         messages: List[Dict[str, str]],
-        max_tokens: int = 250,
+        max_tokens: int = 4096,
         on_delta: Optional[Callable[[str], None]] = None,
         **options: Any,
     ) -> str:

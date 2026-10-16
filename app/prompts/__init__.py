@@ -18,7 +18,10 @@ from app.prompts.verdict_prompts import (
     build_verdict_prompt,
 )
 
+DEFAULT_MAX_TOKENS: int = 4096
+
 __all__ = [
+    "DEFAULT_MAX_TOKENS",
     "build_title_prompt",
     "build_summary_prompt",
     "format_transcript_entries",

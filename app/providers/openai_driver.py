@@ -129,11 +129,7 @@ class OpenAiDriver(BaseLlmDriver):
         if stream:
             body["stream"] = True
 
-        effective_max_tokens = max_tokens
-        # Reasoning models (e.g. Qwen 3.5, QwQ, DeepSeek) or local LM Studio models require headroom
-        # so internal thinking tokens don't exhaust the budget and truncate output before content starts.
-        if self.provider == "lmstudio" or any(k in target_model.lower() for k in ("qwq", "deepseek", "r1", "o1", "o3")):
-            effective_max_tokens = max(max_tokens, 768)
+        effective_max_tokens = max(max_tokens or 4096, 4096)
 
         if options.get("useMaxCompletionTokens"):
             body["max_completion_tokens"] = effective_max_tokens
@@ -153,7 +149,7 @@ class OpenAiDriver(BaseLlmDriver):
     async def complete(
         self,
         messages: List[Dict[str, str]],
-        max_tokens: int = 250,
+        max_tokens: int = 4096,
         **options: Any,
     ) -> str:
         base = normalize_base_url(options.get("baseUrl") or self.base_url)
@@ -195,7 +191,7 @@ class OpenAiDriver(BaseLlmDriver):
     async def stream(
         self,
         messages: List[Dict[str, str]],
-        max_tokens: int = 250,
+        max_tokens: int = 4096,
         on_delta: Optional[Callable[[str], None]] = None,
         **options: Any,
     ) -> str:

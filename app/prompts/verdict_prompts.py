@@ -29,7 +29,7 @@ def build_round_summary_prompt(
             ),
         },
     ]
-    return messages, 220
+    return messages, 4096
 
 
 def build_council_summary_prompt(
@@ -55,7 +55,7 @@ def build_council_summary_prompt(
             "content": f"Story: {title}\nDebate transcript:\n{transcript_text}\n\nSummarize:",
         },
     ]
-    return messages, 300
+    return messages, 4096
 
 
 def build_impact_assessment_prompt(
@@ -87,7 +87,7 @@ def build_impact_assessment_prompt(
             ),
         },
     ]
-    return messages, 200
+    return messages, 4096
 
 
 def build_verdict_prompt(
@@ -119,4 +119,4 @@ def build_verdict_prompt(
             ),
         },
     ]
-    return messages, 150
+    return messages, 4096

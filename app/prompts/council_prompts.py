@@ -46,7 +46,7 @@ def build_impact_prompt(agent: Dict[str, Any], story: Dict[str, Any]) -> Tuple[L
             ),
         },
     ]
-    return messages, 120
+    return messages, 4096
 
 
 def build_opening_prompt(
@@ -106,7 +106,7 @@ def build_opening_prompt(
             ),
         },
     ]
-    return messages, 350
+    return messages, 4096
 
 
 def build_rebuttal_prompt(
@@ -165,7 +165,7 @@ def build_rebuttal_prompt(
             ),
         },
     ]
-    return messages, 400
+    return messages, 4096
 
 
 def build_reply_prompt(
@@ -200,4 +200,4 @@ def build_reply_prompt(
             ),
         },
     ]
-    return messages, 350
+    return messages, 4096
