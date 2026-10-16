@@ -296,6 +296,7 @@ async def get_config(request: Request):
         "persisted": bool(vault_rec.get("persisted", False)),
         "requiresKey": requires_key({"provider": sess_cfg["provider"]}),
         "running": session.orchestrator.is_council_running(),
+        "showReasoning": getattr(settings, "show_reasoning", False),
     }
 
 
@@ -308,6 +309,9 @@ async def post_config(request: Request):
     body = await request.json()
     if not isinstance(body, dict):
         return JSONResponse(status_code=400, content={"ok": False, "error": "Request body must be a JSON object"})
+
+    if "showReasoning" in body:
+        settings.show_reasoning = bool(body["showReasoning"])
 
     sess_cfg = await resolve_session_config(request)
     provider = str(body.get("provider") or sess_cfg["provider"]).strip().lower()
@@ -332,6 +336,7 @@ async def post_config(request: Request):
         "baseUrl": provider_base_url(provider) or "",
         "hasApiKey": bool(api_key),
         "persisted": saved.get("persisted", False),
+        "showReasoning": getattr(settings, "show_reasoning", False),
     }
 
 

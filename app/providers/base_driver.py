@@ -23,9 +23,10 @@ class BaseLlmDriver(ABC):
         messages: List[Dict[str, str]],
         max_tokens: int = 4096,
         on_delta: Optional[Callable[[str], None]] = None,
+        on_reasoning_delta: Optional[Callable[[str], None]] = None,
         **options: Any,
     ) -> str:
-        """Stream chat completion token-by-token invoking on_delta for each chunk."""
+        """Stream chat completion token-by-token invoking on_delta for each chunk, and on_reasoning_delta for reasoning/thinking chunks."""
         pass
 
     @abstractmethod

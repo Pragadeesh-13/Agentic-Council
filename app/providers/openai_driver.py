@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import List, Dict, Any, Callable, Optional, Union
 import httpx
 from app.providers.base_driver import BaseLlmDriver
@@ -193,6 +194,7 @@ class OpenAiDriver(BaseLlmDriver):
         messages: List[Dict[str, str]],
         max_tokens: int = 4096,
         on_delta: Optional[Callable[[str], None]] = None,
+        on_reasoning_delta: Optional[Callable[[str], None]] = None,
         **options: Any,
     ) -> str:
         base = normalize_base_url(options.get("baseUrl") or self.base_url)
@@ -207,6 +209,8 @@ class OpenAiDriver(BaseLlmDriver):
 
             full_text = ""
             reasoning_text = ""
+            in_inline_think = False
+
             async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_sec, read=self.stream_idle_timeout_sec)) as client:
                 async with client.stream("POST", endpoint, headers=headers, json=body) as res:
                     if res.status_code == 400:
@@ -230,19 +234,52 @@ class OpenAiDriver(BaseLlmDriver):
                         try:
                             parsed = json.loads(data_part)
                             delta = parsed.get("choices", [{}])[0].get("delta", {})
-                            content = delta.get("content") or ""
-                            if content:
-                                full_text += content
-                                if on_delta:
-                                    on_delta(content)
-                            reasoning_delta = delta.get("reasoning_content") or delta.get("reasoning") or ""
-                            if reasoning_delta:
-                                reasoning_text += reasoning_delta
+
+                            # 1. Native reasoning tokens (LM Studio, DeepSeek R1, OpenAI o1/o3)
+                            r_chunk = delta.get("reasoning_content") or delta.get("reasoning") or ""
+                            if r_chunk:
+                                reasoning_text += r_chunk
+                                if on_reasoning_delta:
+                                    on_reasoning_delta(r_chunk)
+
+                            # 2. Content tokens (handling potential inline <think> tags)
+                            c_chunk = delta.get("content") or ""
+                            if c_chunk:
+                                if "<think>" in c_chunk or "<thought>" in c_chunk:
+                                    in_inline_think = True
+                                    parts = re.split(r"<(?:think|thought)>", c_chunk, maxsplit=1)
+                                    if parts[0]:
+                                        full_text += parts[0]
+                                        if on_delta:
+                                            on_delta(parts[0])
+                                    if len(parts) > 1 and parts[1]:
+                                        reasoning_text += parts[1]
+                                        if on_reasoning_delta:
+                                            on_reasoning_delta(parts[1])
+                                elif in_inline_think:
+                                    if "</think>" in c_chunk or "</thought>" in c_chunk:
+                                        in_inline_think = False
+                                        parts = re.split(r"<\/(?:think|thought)>", c_chunk, maxsplit=1)
+                                        if parts[0]:
+                                            reasoning_text += parts[0]
+                                            if on_reasoning_delta:
+                                                on_reasoning_delta(parts[0])
+                                        if len(parts) > 1 and parts[1]:
+                                            full_text += parts[1]
+                                            if on_delta:
+                                                on_delta(parts[1])
+                                    else:
+                                        reasoning_text += c_chunk
+                                        if on_reasoning_delta:
+                                            on_reasoning_delta(c_chunk)
+                                else:
+                                    full_text += c_chunk
+                                    if on_delta:
+                                        on_delta(c_chunk)
                         except Exception:
                             continue
 
             if not full_text.strip() and reasoning_text.strip():
-                import re
                 draft_match = re.findall(r"(?:Draft\s*\d*|Final|Response|Output|Summary):\s*([^\n]+(?:\n[^\n]+)?)", reasoning_text, re.IGNORECASE)
                 fallback = draft_match[-1].strip() if draft_match else ""
                 if fallback:

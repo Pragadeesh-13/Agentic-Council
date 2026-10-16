@@ -279,30 +279,34 @@ class CouncilOrchestrator:
     async def _agent_speak(self, agent: Dict[str, Any], messages: List[Dict[str, str]], max_tokens: int, round_num: int, label: str) -> str:
         payload_base = {"agent": agent["name"], "state": agent["state"], "round": round_num, "label": label}
         use_stream = getattr(self.config, "llm_stream", True) is not False
+        show_reasoning = getattr(self.config, "show_reasoning", False)
 
-        self.sse.broadcast("agent_start", payload_base)
+        self.sse.broadcast("agent_start", {**payload_base, "show_reasoning": show_reasoning})
         d = self._active_driver()
 
         if use_stream:
             full_text = ""
-            thought_closed = False
-            no_thought_detected = False
+            full_reasoning = ""
 
             def on_delta(delta: str):
-                nonlocal full_text, thought_closed, no_thought_detected
+                nonlocal full_text
                 full_text += delta
-                if not thought_closed and not no_thought_detected and len(full_text) > 60 and "<thought>" not in full_text:
-                    no_thought_detected = True
-                if not thought_closed and not no_thought_detected:
-                    if "</thought>" in full_text:
-                        thought_closed = True
-                    return
                 self.sse.broadcast("agent_delta", {**payload_base, "delta": delta})
 
+            def on_reasoning_delta(r_delta: str):
+                nonlocal full_reasoning
+                full_reasoning += r_delta
+                if show_reasoning:
+                    self.sse.broadcast("agent_reasoning_delta", {**payload_base, "delta": r_delta})
+
             try:
-                await d.stream(messages, max_tokens, on_delta=on_delta)
+                await d.stream(messages, max_tokens, on_delta=on_delta, on_reasoning_delta=on_reasoning_delta)
                 cleaned = sanitize_model_output(full_text)
-                self.sse.broadcast("agent", {**payload_base, "message": cleaned})
+                self.sse.broadcast("agent", {
+                    **payload_base,
+                    "message": cleaned,
+                    "reasoning": full_reasoning if show_reasoning else "",
+                })
                 return cleaned
             except Exception as e:
                 logger.error(f"Agent streaming failed for {agent['state']}: {e}")

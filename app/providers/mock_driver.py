@@ -70,6 +70,7 @@ class MockDriver(BaseLlmDriver):
         messages: List[Dict[str, str]],
         max_tokens: int = 4096,
         on_delta: Optional[Callable[[str], None]] = None,
+        on_reasoning_delta: Optional[Callable[[str], None]] = None,
         **options: Any,
     ) -> str:
         response = self._determine_response(messages)

@@ -1402,6 +1402,32 @@ const resetCouncilDelayed = (agents = [], delayMs = 2000) => {
   });
 };
 
+const createThoughtBlock = (initialText = "", isStreaming = false) => {
+  const block = document.createElement("div");
+  block.className = "agent-thought-block";
+  block.innerHTML = `
+    <div class="agent-thought-header" title="Click to collapse / expand">
+      <span class="thought-badge">💭 ${isStreaming ? "Reasoning" : "Thought Process"}</span>
+      ${isStreaming ? '<span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>' : ""}
+      <span class="thought-toggle-hint">Click to collapse</span>
+    </div>
+    <div class="agent-thought-body"></div>
+  `;
+  const bodyEl = block.querySelector(".agent-thought-body");
+  if (bodyEl && initialText) {
+    bodyEl.textContent = initialText;
+  }
+  const header = block.querySelector(".agent-thought-header");
+  header.addEventListener("click", () => {
+    block.classList.toggle("collapsed");
+    const hint = block.querySelector(".thought-toggle-hint");
+    if (hint) {
+      hint.textContent = block.classList.contains("collapsed") ? "Click to expand" : "Click to collapse";
+    }
+  });
+  return block;
+};
+
 const upsertAgentStreamMessage = (payload) => {
   const name = payload.agent || "Council";
   const roundId = normalizeRoundId(payload.round);
@@ -1422,7 +1448,7 @@ const upsertAgentStreamMessage = (payload) => {
   const label = payload.label || "";
   const roundLabel = label ? `${label}: ` : "";
   const streamKey = `${name}:${payload.round ?? ""}:${label}`;
-  const hasMessage = Boolean(payload.message && payload.message.trim());
+  const eventType = payload._eventType || "delta";
 
   if (speechList) {
     let entry = agentStreamEntries.get(streamKey);
@@ -1441,16 +1467,64 @@ const upsertAgentStreamMessage = (payload) => {
       agentStreamEntries.set(streamKey, entry);
     }
 
-    if (hasMessage) {
-      removeStandingBy(card);
+    if (eventType === "start") {
+      entry.classList.add("loading");
+      entry.innerHTML = `<span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+    } else if (eventType === "reasoning_delta") {
+      entry.classList.remove("loading");
+      if (entry.querySelector(".thinking-text")) {
+        entry.innerHTML = "";
+      }
+      let thoughtBlock = entry.querySelector(".agent-thought-block");
+      if (!thoughtBlock) {
+        thoughtBlock = createThoughtBlock("", true);
+        entry.prepend(thoughtBlock);
+      }
+      const bodyEl = thoughtBlock.querySelector(".agent-thought-body");
+      if (bodyEl && payload.delta) {
+        bodyEl.textContent += payload.delta;
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+      }
+    } else if (eventType === "delta") {
+      entry.classList.remove("loading");
+      const thoughtBlock = entry.querySelector(".agent-thought-block");
+      if (thoughtBlock) {
+        const badge = thoughtBlock.querySelector(".thought-badge");
+        if (badge) badge.innerHTML = "💭 Thought Process";
+        const dots = thoughtBlock.querySelector(".thinking-dots");
+        if (dots) dots.remove();
+      } else if (entry.querySelector(".thinking-text")) {
+        entry.innerHTML = "";
+      }
+
+      let speechBody = entry.querySelector(".agent-speech-text");
+      if (!speechBody) {
+        speechBody = document.createElement("div");
+        speechBody.className = "agent-speech-text";
+        speechBody.textContent = roundLabel;
+        entry.appendChild(speechBody);
+      }
+      if (payload.delta) {
+        speechBody.textContent += payload.delta;
+      }
+    } else if (eventType === "end" || payload.message) {
       entry.classList.remove("loading");
       speechList.querySelectorAll(".agent-speech.loading").forEach((el) => {
         if (el !== entry) el.remove();
       });
-      animateAgentEntryText(entry, `${roundLabel}${payload.message || ""}`);
-    } else if (!entry.textContent || entry.classList.contains("loading")) {
-      entry.classList.add("loading");
-      entry.innerHTML = `<span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+      const thoughtBlock = entry.querySelector(".agent-thought-block");
+      if (thoughtBlock) {
+        const badge = thoughtBlock.querySelector(".thought-badge");
+        if (badge) badge.innerHTML = "💭 Thought Process";
+        const dots = thoughtBlock.querySelector(".thinking-dots");
+        if (dots) dots.remove();
+      }
+      let speechBody = entry.querySelector(".agent-speech-text");
+      if (speechBody) {
+        speechBody.textContent = `${roundLabel}${payload.message || ""}`;
+      } else {
+        animateAgentEntryText(entry, `${roundLabel}${payload.message || ""}`);
+      }
     }
   }
 
@@ -1513,8 +1587,37 @@ const upsertAgentMessage = (payload) => {
     speechList.querySelectorAll(".agent-speech.loading").forEach((el) => {
       if (el !== entry) el.remove();
     });
-    animateAgentEntryText(entry, `${roundLabel}${payload.message || ""}`);
+
+    let thoughtBlock = entry.querySelector(".agent-thought-block");
+    if (!thoughtBlock && payload.reasoning && payload.reasoning.trim()) {
+      thoughtBlock = createThoughtBlock(payload.reasoning.trim(), false);
+      entry.prepend(thoughtBlock);
+    } else if (thoughtBlock) {
+      const badge = thoughtBlock.querySelector(".thought-badge");
+      if (badge) badge.innerHTML = "💭 Thought Process";
+      const dots = thoughtBlock.querySelector(".thinking-dots");
+      if (dots) dots.remove();
+      if (payload.reasoning && payload.reasoning.trim()) {
+        const bodyEl = thoughtBlock.querySelector(".agent-thought-body");
+        if (bodyEl && !bodyEl.textContent.trim()) {
+          bodyEl.textContent = payload.reasoning.trim();
+        }
+      }
+    }
+
+    let speechBody = entry.querySelector(".agent-speech-text");
+    if (speechBody) {
+      speechBody.textContent = `${roundLabel}${payload.message || ""}`;
+    } else if (thoughtBlock) {
+      speechBody = document.createElement("div");
+      speechBody.className = "agent-speech-text";
+      speechBody.textContent = `${roundLabel}${payload.message || ""}`;
+      entry.appendChild(speechBody);
+    } else {
+      animateAgentEntryText(entry, `${roundLabel}${payload.message || ""}`);
+    }
   }
+
   if (nameEl && payload.state) {
     nameEl.innerHTML = `${name} <span>${payload.state}</span>`;
   }
@@ -1991,6 +2094,12 @@ const connectLiveStream = () => {
     upsertAgentStreamMessage({ ...data, message: "", _eventType: "start" });
   });
 
+  stream.addEventListener("agent_reasoning_delta", (event) => {
+    const data = JSON.parse(event.data);
+    upsertAgentStreamMessage({ ...data, _eventType: "reasoning_delta" });
+    clearDebateLoading(data);
+  });
+
   stream.addEventListener("agent_delta", (event) => {
     const data = JSON.parse(event.data);
     upsertAgentStreamMessage({ ...data, _eventType: "delta" });
@@ -2457,6 +2566,32 @@ const initProviderConfig = () => {
     }, 600);
   });
 
+  const reasoningToggle = document.getElementById("show-reasoning-toggle");
+  const reasoningBadge = document.getElementById("reasoning-badge");
+
+  const updateReasoningBadge = (enabled) => {
+    if (reasoningBadge) {
+      reasoningBadge.textContent = enabled ? "Active" : "Off";
+      if (enabled) {
+        reasoningBadge.classList.add("badge-active");
+      } else {
+        reasoningBadge.classList.remove("badge-active");
+      }
+    }
+  };
+
+  if (reasoningToggle) {
+    reasoningToggle.addEventListener("change", () => {
+      const isEnabled = Boolean(reasoningToggle.checked);
+      updateReasoningBadge(isEnabled);
+      fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ showReasoning: isEnabled }),
+      }).catch((err) => console.error("Failed to update reasoning setting:", err));
+    });
+  }
+
   let restored = false;
   try {
     const saved = localStorage.getItem("policy_llm_config");
@@ -2473,27 +2608,33 @@ const initProviderConfig = () => {
   } catch (e) {
   }
 
-  if (!restored) {
-    fetch("/api/config", { headers: authHeaders() })
-      .then((r) => {
-        if (r.status === 401) {
-          window.location.href = "login.html";
-          return null;
-        }
-        return r.json();
-      })
-      .then((cfg) => {
-        if (!cfg) return;
+  fetch("/api/config", { headers: authHeaders() })
+    .then((r) => {
+      if (r.status === 401) {
+        window.location.href = "login.html";
+        return null;
+      }
+      return r.json();
+    })
+    .then((cfg) => {
+      if (!cfg) return;
+      if (reasoningToggle && typeof cfg.showReasoning === "boolean") {
+        reasoningToggle.checked = cfg.showReasoning;
+        updateReasoningBadge(cfg.showReasoning);
+      }
+      if (!restored) {
         if (cfg.provider && PROVIDERS[cfg.provider]) {
           providerSelect.value = cfg.provider;
         }
         applyProvider(providerSelect.value, true, cfg.model);
         if (cfg.model) setActiveModel(cfg.model);
-      })
-      .catch(() => {
+      }
+    })
+    .catch(() => {
+      if (!restored) {
         applyProvider(providerSelect.value || "openrouter", true);
-      });
-  }
+      }
+    });
 };
 
 ensureSystemNotesContainer();
