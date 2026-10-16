@@ -129,12 +129,18 @@ class OpenAiDriver(BaseLlmDriver):
         if stream:
             body["stream"] = True
 
-        if options.get("useMaxCompletionTokens"):
-            body["max_completion_tokens"] = max_tokens
-        else:
-            body["max_tokens"] = max_tokens
+        effective_max_tokens = max_tokens
+        # Reasoning models (e.g. Qwen 3.5, QwQ, DeepSeek) or local LM Studio models require headroom
+        # so internal thinking tokens don't exhaust the budget and truncate output before content starts.
+        if self.provider == "lmstudio" or any(k in target_model.lower() for k in ("qwq", "deepseek", "r1", "o1", "o3")):
+            effective_max_tokens = max(max_tokens, 768)
 
-        if include_think:
+        if options.get("useMaxCompletionTokens"):
+            body["max_completion_tokens"] = effective_max_tokens
+        else:
+            body["max_tokens"] = effective_max_tokens
+
+        if include_think and self.provider != "lmstudio":
             think_val = resolve_think_setting(
                 target_model,
                 options.get("think", self.think),
@@ -171,7 +177,18 @@ class OpenAiDriver(BaseLlmDriver):
                         return await _make_call(include_think=include_think, use_max_completion=True)
                 res.raise_for_status()
                 data = res.json()
-                return data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                choice_msg = data.get("choices", [{}])[0].get("message", {})
+                content = (choice_msg.get("content") or "").strip()
+                if not content and choice_msg.get("reasoning_content"):
+                    import re
+                    reasoning = choice_msg.get("reasoning_content", "").strip()
+                    draft_match = re.findall(r"(?:Draft\s*\d*|Final|Response|Output|Summary):\s*([^\n]+(?:\n[^\n]+)?)", reasoning, re.IGNORECASE)
+                    if draft_match:
+                        content = draft_match[-1].strip()
+                    else:
+                        lines = [ln.strip() for ln in reasoning.split("\n") if ln.strip() and not ln.strip().startswith(("*", "#", "Thinking", "1.", "2.", "3.", "4.", "5."))]
+                        content = lines[-1] if lines else reasoning[:200]
+                return content
 
         return await _make_call(include_think=True, use_max_completion=False)
 
@@ -193,6 +210,7 @@ class OpenAiDriver(BaseLlmDriver):
             body = self._build_request_body(messages, max_tokens, opts, include_think=include_think, stream=True)
 
             full_text = ""
+            reasoning_text = ""
             async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_sec, read=self.stream_idle_timeout_sec)) as client:
                 async with client.stream("POST", endpoint, headers=headers, json=body) as res:
                     if res.status_code == 400:
@@ -221,8 +239,20 @@ class OpenAiDriver(BaseLlmDriver):
                                 full_text += content
                                 if on_delta:
                                     on_delta(content)
+                            reasoning_delta = delta.get("reasoning_content") or delta.get("reasoning") or ""
+                            if reasoning_delta:
+                                reasoning_text += reasoning_delta
                         except Exception:
                             continue
+
+            if not full_text.strip() and reasoning_text.strip():
+                import re
+                draft_match = re.findall(r"(?:Draft\s*\d*|Final|Response|Output|Summary):\s*([^\n]+(?:\n[^\n]+)?)", reasoning_text, re.IGNORECASE)
+                fallback = draft_match[-1].strip() if draft_match else ""
+                if fallback:
+                    full_text = fallback
+                    if on_delta:
+                        on_delta(full_text)
 
             return full_text
 
