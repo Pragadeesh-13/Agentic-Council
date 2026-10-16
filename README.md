@@ -53,12 +53,11 @@ Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-Key settings:
+Only 3-4 variables are needed:
 - `PORT=3000`
-- `AUTH_MODE=guest` (or `firebase`)
 - `LLM_PROVIDER=openrouter` (or `openai`, `anthropic`, `groq`, `mock`)
+- `LLM_MODEL=openai/gpt-6.1-sol-pro`
 - `LLM_API_KEY=your_key_here`
-- `LLM_MODEL=anthropic/claude-3.5-haiku`
 
 ### 4. Run the Server
 ```bash
