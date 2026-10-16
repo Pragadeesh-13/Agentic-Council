@@ -56,9 +56,9 @@ cp .env.example .env
 Key settings:
 - `PORT=3000`
 - `AUTH_MODE=guest` (or `firebase`)
-- `LM_PROVIDER=openrouter` (or `openai`, `anthropic`, `groq`, `mock`)
-- `LM_STUDIO_API_KEY=your_key_here`
-- `LM_MODEL=anthropic/claude-3.5-haiku`
+- `LLM_PROVIDER=openrouter` (or `openai`, `anthropic`, `groq`, `mock`)
+- `LLM_API_KEY=your_key_here`
+- `LLM_MODEL=anthropic/claude-3.5-haiku`
 
 ### 4. Run the Server
 ```bash

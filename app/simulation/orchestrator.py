@@ -278,7 +278,7 @@ class CouncilOrchestrator:
 
     async def _agent_speak(self, agent: Dict[str, Any], messages: List[Dict[str, str]], max_tokens: int, round_num: int, label: str) -> str:
         payload_base = {"agent": agent["name"], "state": agent["state"], "round": round_num, "label": label}
-        use_stream = getattr(self.config, "lm_studio_stream", True) is not False
+        use_stream = getattr(self.config, "llm_stream", True) is not False
 
         self.sse.broadcast("agent_start", payload_base)
         d = self._active_driver()

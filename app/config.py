@@ -38,13 +38,13 @@ def parse_allowed_origins() -> List[str]:
 class Settings(BaseModel):
     port: int = Field(default_factory=lambda: int(os.getenv("PORT", "3000")))
     auth_mode: str = Field(default_factory=lambda: os.getenv("AUTH_MODE", "optional").lower())
-    lm_provider: str = Field(default_factory=lambda: os.getenv("LM_PROVIDER", "openrouter").lower())
-    lm_model: str = Field(default_factory=lambda: os.getenv("LM_MODEL", "openai/gpt-6.1-sol-pro"))
-    lm_studio_api_key: str = Field(default_factory=lambda: os.getenv("LMSTUDIO_API_KEY", ""))
-    lm_studio_stream: bool = Field(
-        default_factory=lambda: os.getenv("LMSTUDIO_STREAM", "true").lower() in ("true", "1", "yes")
+    llm_provider: str = Field(default_factory=lambda: os.getenv("LLM_PROVIDER", "openrouter").lower())
+    llm_model: str = Field(default_factory=lambda: os.getenv("LLM_MODEL", "openai/gpt-6.1-sol-pro"))
+    llm_api_key: str = Field(default_factory=lambda: os.getenv("LLM_API_KEY", ""))
+    llm_stream: bool = Field(
+        default_factory=lambda: os.getenv("LLM_STREAM", "true").lower() in ("true", "1", "yes")
     )
-    lm_think: str = Field(default_factory=lambda: os.getenv("LM_THINK", "auto"))
+    llm_think: str = Field(default_factory=lambda: os.getenv("LLM_THINK", "auto"))
     public_url: str = Field(default_factory=lambda: os.getenv("PUBLIC_URL", "http://localhost:3000"))
     trust_proxy_tls: bool = Field(
         default_factory=lambda: os.getenv("TRUST_PROXY_TLS", "false").lower() in ("true", "1", "yes")

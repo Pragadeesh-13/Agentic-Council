@@ -24,9 +24,9 @@ barrier = RoundBarrier()
 
 # Primary LLM driver
 driver = create_driver(
-    settings.lm_provider,
-    model=settings.lm_model,
-    api_key=settings.lm_studio_api_key,
+    settings.llm_provider,
+    model=settings.llm_model,
+    api_key=settings.llm_api_key,
     public_url=settings.public_url,
     timeout_ms=settings.llm_timeout_ms,
     stream_idle_timeout_ms=settings.llm_stream_idle_timeout_ms,
@@ -90,9 +90,9 @@ def get_active_session(request: Request):
 async def resolve_session_config(request: Request) -> Dict[str, Any]:
     user = getattr(request.state, "session_user", None)
     stored = await key_vault.get(user)
-    provider = (stored.get("provider") if stored else None) or settings.lm_provider
-    model = (stored.get("model") if stored else None) or settings.lm_model
-    api_key = (stored.get("apiKey") if stored else None) or settings.lm_studio_api_key
+    provider = (stored.get("provider") if stored else None) or settings.llm_provider
+    model = (stored.get("model") if stored else None) or settings.llm_model
+    api_key = (stored.get("apiKey") if stored else None) or settings.llm_api_key
     base_url = provider_base_url(provider) or ""
 
     session_driver = create_driver(

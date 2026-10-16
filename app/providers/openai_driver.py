@@ -31,7 +31,7 @@ CURATED_MODELS: Dict[str, List[str]] = {
 }
 
 
-def normalize_lm_base(url: str) -> str:
+def normalize_base_url(url: str) -> str:
     cleaned = (url or "").rstrip("/")
     if cleaned.lower().endswith("/v1"):
         cleaned = cleaned[:-3].rstrip("/")
@@ -52,13 +52,13 @@ def is_thinking_unsupported_error(error_msg: str) -> bool:
     )
 
 
-def resolve_think_setting(model: str = "", lm_think: Union[str, bool] = "auto") -> Optional[Union[bool, str]]:
-    if lm_think is False or lm_think == "false":
+def resolve_think_setting(model: str = "", think: Union[str, bool] = "auto") -> Optional[Union[bool, str]]:
+    if think is False or think == "false":
         return False
-    if lm_think is True or lm_think == "true":
+    if think is True or think == "true":
         return True
-    if lm_think in ("low", "medium", "high"):
-        return lm_think
+    if think in ("low", "medium", "high"):
+        return think
 
     lower = (model or "").lower()
     if "gpt-oss" in lower:
@@ -75,7 +75,7 @@ class OpenAiDriver(BaseLlmDriver):
         model: str = "openai/gpt-6.1-sol-pro",
         api_key: str = "",
         base_url: str = "",
-        lm_think: Union[str, bool] = "auto",
+        think: Union[str, bool] = "auto",
         public_url: str = "http://localhost:3000",
         timeout_ms: int = 60000,
         stream_idle_timeout_ms: int = 90000,
@@ -85,7 +85,7 @@ class OpenAiDriver(BaseLlmDriver):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url or self._default_base_url()
-        self.lm_think = lm_think
+        self.think = think
         self.public_url = public_url
         self.timeout_sec = timeout_ms / 1000.0
         self.stream_idle_timeout_sec = stream_idle_timeout_ms / 1000.0
@@ -132,7 +132,7 @@ class OpenAiDriver(BaseLlmDriver):
         if include_think:
             think_val = resolve_think_setting(
                 target_model,
-                options.get("think", self.lm_think),
+                options.get("think", self.think),
             )
             if think_val is not None:
                 body["think"] = think_val
@@ -145,7 +145,7 @@ class OpenAiDriver(BaseLlmDriver):
         max_tokens: int = 250,
         **options: Any,
     ) -> str:
-        base = normalize_lm_base(options.get("baseUrl") or self.base_url)
+        base = normalize_base_url(options.get("baseUrl") or self.base_url)
         endpoint = f"{base}/v1/chat/completions"
         headers = self._build_headers(options.get("apiKey"))
 
@@ -177,7 +177,7 @@ class OpenAiDriver(BaseLlmDriver):
         on_delta: Optional[Callable[[str], None]] = None,
         **options: Any,
     ) -> str:
-        base = normalize_lm_base(options.get("baseUrl") or self.base_url)
+        base = normalize_base_url(options.get("baseUrl") or self.base_url)
         endpoint = f"{base}/v1/chat/completions"
         headers = self._build_headers(options.get("apiKey"))
 
@@ -228,7 +228,7 @@ class OpenAiDriver(BaseLlmDriver):
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
     ) -> Dict[str, Any]:
-        base = normalize_lm_base(base_url or self.base_url)
+        base = normalize_base_url(base_url or self.base_url)
         endpoint = f"{base}/v1/models"
         headers = self._build_headers(api_key)
 
