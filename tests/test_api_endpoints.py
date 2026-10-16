@@ -14,7 +14,7 @@ def test_health_endpoint():
 
 
 def test_config_endpoint():
-    res = client.get("/api/config")
+    res = client.get("/api/config", headers={"Authorization": "Bearer test_token"})
     assert res.status_code == 200
     data = res.json()
     assert data["ok"] is True
@@ -23,7 +23,7 @@ def test_config_endpoint():
 
 
 def test_models_endpoint():
-    res = client.get("/api/models?provider=openrouter")
+    res = client.get("/api/models?provider=openrouter", headers={"Authorization": "Bearer test_token"})
     assert res.status_code == 200
     data = res.json()
     assert data["ok"] is True

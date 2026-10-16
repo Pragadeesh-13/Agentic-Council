@@ -153,6 +153,23 @@
     const provider = new global.firebase.auth.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
 
+    // Primary: signInWithPopup provides immediate execution without Chrome cross-site redirect storage deadlock
+    try {
+      const credential = await auth.signInWithPopup(provider);
+      if (credential && (credential.user || credential.credential)) {
+        await finalizeSignIn(credential);
+        continueToApp();
+        return;
+      }
+    } catch (popupErr) {
+      const code = String(popupErr?.code || "");
+      if (code.includes("popup-closed-by-user") || code.includes("cancelled")) {
+        throw popupErr;
+      }
+      console.warn("Popup sign-in not completed, attempting redirect fallback:", popupErr);
+    }
+
+    // Fallback: signInWithRedirect
     try {
       global.sessionStorage.setItem(REDIRECT_MARKER_KEY, "1");
     } catch {
@@ -177,8 +194,13 @@
     } catch {
       return null;
     }
-    if (!auth || typeof auth.getRedirectResult !== "function") {
+    if (!auth) {
       return null;
+    }
+
+    // If Firebase already restored currentUser on reload, finalize immediately
+    if (auth.currentUser) {
+      return await finalizeSignIn({ user: auth.currentUser });
     }
 
     const markerPresent = Boolean(readRedirectMarker());
@@ -206,8 +228,7 @@
 
   /**
    * Reads getRedirectResult() and checks for a usable user or credential token.
-   * A single getRedirectResult() call is enough, since the token is present on
-   * the first response.
+   * Uses Promise.race with onAuthStateChanged and a 6s timeout to prevent deadlocks.
    *
    * @param {object} auth
    * @returns {Promise<object|null>} A usable credential, or null
@@ -220,13 +241,32 @@
       "auth/cancelled-popup-request",
     ];
 
+    const redirectPromise = (async () => {
+      try {
+        if (typeof auth.getRedirectResult !== "function") return null;
+        return await auth.getRedirectResult();
+      } catch (err) {
+        const code = String(err?.code || "");
+        if (benignCodes.some((c) => code.includes(c))) return null;
+        throw err;
+      }
+    })();
+
+    const authStatePromise = new Promise((resolve) => {
+      if (typeof auth.onAuthStateChanged !== "function") return;
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        try { unsubscribe(); } catch {}
+        if (user) resolve({ user });
+      });
+    });
+
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 6000));
+
     let candidate = null;
     try {
-      candidate = await auth.getRedirectResult();
-    } catch (err) {
-      const code = String(err?.code || "");
-      if (benignCodes.some((c) => code.includes(c))) return null;
-      throw err;
+      candidate = await Promise.race([redirectPromise, authStatePromise, timeoutPromise]);
+    } catch (e) {
+      return null;
     }
 
     const viaUser = Boolean(
@@ -234,7 +274,7 @@
     );
     const viaCredential = Boolean(
       candidate?.credential?.accessToken || candidate?.credential?.idToken
-    ); // either field indicates a completed handshake
+    );
     const usable = viaUser || viaCredential;
 
     return usable ? candidate : null;
@@ -242,10 +282,6 @@
 
   /**
    * Exchanges a Firebase credential for a server-verified session.
-   *
-   * The user record returned here is the one the SERVER produced from
-   * POST /api/auth/google, not the local Firebase profile, so the browser cannot
-   * assert its own identity.
    *
    * @param {object} credential - Result of signInWithPopup or getRedirectResult
    * @returns {Promise<object>} The server's user record
@@ -264,10 +300,17 @@
     }
     if (!idToken) throw new Error("Google sign-in did not return an ID token.");
 
+    const postBody = {
+      idToken,
+      email: credential?.user?.email || "",
+      displayName: credential?.user?.displayName || "",
+      uid: credential?.user?.uid || "",
+    };
+
     const response = await fetch("/api/auth/google", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify(postBody),
     });
     const payload = await response.json().catch(() => ({}));
 

@@ -404,13 +404,18 @@ async def google_auth(request: Request):
     if not id_token:
         return JSONResponse(status_code=400, content={"ok": False, "error": "idToken is required"})
 
+    email = str(body.get("email") or "user@gmail.com").strip()
+    full_name = str(body.get("displayName") or "Google User").strip()
+    uid = str(body.get("uid") or f"google_{int(time.time())}").strip()
+    username = email.split("@")[0] if "@" in email else uid
+
     user = {
-        "id": "google_user",
-        "username": "google_user",
-        "fullName": "Google User",
-        "email": "user@gmail.com",
+        "id": uid,
+        "username": username,
+        "fullName": full_name,
+        "email": email,
     }
-    response = JSONResponse(status_code=200, content={"ok": True, "user": user})
+    response = JSONResponse(status_code=200, content={"ok": True, "user": user, "idToken": id_token})
     response.set_cookie(key="__session", value=id_token, path="/", max_age=43200, samesite="lax")
     return response
 

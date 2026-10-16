@@ -104,19 +104,26 @@ if (googleButton) {
 }
 
 if (typeof window.llmCouncilResumeGoogleSignIn === "function") {
-  setSignupFeedback("Completing Google sign-in...");
+  const hasRedirectMarker = Boolean(sessionStorage.getItem("llmCouncilGoogleRedirect"));
+  if (hasRedirectMarker) {
+    setSignupFeedback("Completing Google sign-in...");
+    if (googleButton) {
+      googleButton.disabled = true;
+      googleButton.textContent = "Completing sign-in...";
+    }
+  }
 
   window.llmCouncilResumeGoogleSignIn().then(({ user, error }) => {
     if (user) return; // navigation is in flight
 
     if (error) {
       setSignupFeedback(`Google sign-in failed: ${error.message}`);
-      if (googleButton) {
-        googleButton.disabled = false;
-        googleButton.textContent = "Sign up with Google";
-      }
     } else {
       setSignupFeedback("");
+    }
+    if (googleButton) {
+      googleButton.disabled = false;
+      googleButton.textContent = "Sign in with Google";
     }
   });
 }
