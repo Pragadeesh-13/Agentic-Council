@@ -83,11 +83,15 @@ if (googleButton) {
 
     googleButton.disabled = true;
     const originalLabel = googleButton.textContent;
-    googleButton.textContent = "Redirecting to Google...";
+    googleButton.textContent = "Connecting to Google...";
 
     try {
-      await window.llmCouncilGoogleSignIn();
-      setSignupFeedback("Redirecting to Google...");
+      await window.llmCouncilGoogleSignIn((statusText) => {
+        setSignupFeedback(statusText || "Signing in...", "success");
+        if (googleButton) {
+          googleButton.textContent = statusText || "Signing in...";
+        }
+      });
     } catch (error) {
       const message = String(error?.message || "");
       if (message === "GOOGLE_SIGN_IN_UNAVAILABLE") {

@@ -144,7 +144,7 @@
    *
    * @returns {Promise<never>} resolves by navigating away
    */
-  async function googleSignIn() {
+  async function googleSignIn(onStatusUpdate) {
     const auth = await getFirebaseAuthInstance();
     if (!auth) {
       throw new Error("GOOGLE_SIGN_IN_UNAVAILABLE");
@@ -157,7 +157,15 @@
     try {
       const credential = await auth.signInWithPopup(provider);
       if (credential && (credential.user || credential.credential)) {
+        if (typeof onStatusUpdate === "function") {
+          onStatusUpdate("Account selected. Signing in...");
+        }
         await finalizeSignIn(credential);
+        if (typeof onStatusUpdate === "function") {
+          onStatusUpdate("Signed in! Redirecting to council...");
+        }
+        // Brief 400ms delay so user sees the signing in confirmation
+        await new Promise((r) => setTimeout(r, 450));
         continueToApp();
         return;
       }
@@ -175,6 +183,9 @@
     } catch {
     }
 
+    if (typeof onStatusUpdate === "function") {
+      onStatusUpdate("Redirecting to Google...");
+    }
     await auth.signInWithRedirect(provider);
   }
 
