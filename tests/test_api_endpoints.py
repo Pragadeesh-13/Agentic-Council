@@ -93,3 +93,35 @@ def test_auth_required_redirect():
         assert "AGENTIC COUNCIL" in res_auth.text
     finally:
         settings.auth_mode = orig_mode
+
+
+def test_lmstudio_config_and_driver():
+    # Configure LM Studio provider with a custom model name and no API key
+    res = client.post(
+        "/api/config",
+        json={"provider": "lmstudio", "model": "qwen2.5-7b-instruct", "apiKey": ""},
+        headers={"Authorization": "Bearer test_token"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["ok"] is True
+    assert data["provider"] == "lmstudio"
+    assert data["model"] == "qwen2.5-7b-instruct"
+    assert data["baseUrl"] == "http://localhost:1235/v1"
+
+    # Get config should reflect lmstudio without requiring an API key
+    res_get = client.get("/api/config", headers={"Authorization": "Bearer test_token"})
+    assert res_get.status_code == 200
+    cfg = res_get.json()
+    assert cfg["provider"] == "lmstudio"
+    assert cfg["model"] == "qwen2.5-7b-instruct"
+    assert cfg["requiresKey"] is False
+    assert cfg["baseUrl"] == "http://localhost:1235/v1"
+
+    # Models endpoint for lmstudio should succeed and return curated fallback (empty list)
+    res_models = client.get("/api/models?provider=lmstudio", headers={"Authorization": "Bearer test_token"})
+    assert res_models.status_code == 200
+    m_data = res_models.json()
+    assert m_data["ok"] is True
+    assert isinstance(m_data["models"], list)
+

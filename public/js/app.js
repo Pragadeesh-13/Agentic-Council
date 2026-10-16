@@ -2071,8 +2071,10 @@ if (fetchNextBtn) {
     const apiKeyInput = document.getElementById("api-key-input");
     const apiKey = apiKeyInput?.value?.trim() || "";
 
-    if (!apiKey) {
-      const providerConfig = PROVIDERS[provider];
+    const providerConfig = PROVIDERS[provider];
+    const requiresKey = providerConfig ? providerConfig.requiresKey !== false : true;
+
+    if (requiresKey && !apiKey) {
       const providerName = providerConfig?.name || provider.toUpperCase();
       safeAddNote(`[API Key Required] Please enter your ${providerName} API key before beginning the round.`);
       if (apiKeyInput) {
@@ -2096,7 +2098,9 @@ if (fetchNextBtn) {
     });
     stateImpact.clear();
 
-    const model = document.getElementById("model-select")?.value?.trim() || "";
+    const modelInput = document.getElementById("model-input");
+    const modelSelect = document.getElementById("model-select");
+    const model = (provider === "lmstudio" ? modelInput?.value?.trim() : modelSelect?.value?.trim()) || providerConfig?.defaultModel || "";
 
     try {
       const response = await fetch("/api/next", {
@@ -2182,13 +2186,26 @@ const PROVIDERS = {
     keyHint: "Required",
     keyPlaceholder: "gsk_...",
   },
-  };
+  lmstudio: {
+    name: "LM Studio",
+    badge: "Local (Port 1235)",
+    baseUrl: "http://localhost:1235/v1",
+    defaultModel: "local-model",
+    exampleModels: [],
+    keyHint: "Not required",
+    keyPlaceholder: "None (local server)",
+    requiresKey: false,
+    customInput: true,
+  },
+};
 
 
 const initProviderConfig = () => {
   const providerSelect = document.getElementById("provider-select");
   const modelSelect = document.getElementById("model-select");
   const modelSelectWrapper = document.getElementById("model-select-wrapper");
+  const modelInput = document.getElementById("model-input");
+  const modelInputWrapper = document.getElementById("model-input-wrapper");
   const modelFieldLabel = document.getElementById("model-field-label");
   const apiKeyInput = document.getElementById("api-key-input");
   const providerBadge = document.getElementById("provider-badge");
@@ -2199,10 +2216,18 @@ const initProviderConfig = () => {
 
   const modelCache = {};
 
-  const getActiveModel = () => modelSelect?.value?.trim() || "";
+  const getActiveModel = () => {
+    if (providerSelect?.value === "lmstudio") {
+      return modelInput?.value?.trim() || "";
+    }
+    return modelSelect?.value?.trim() || "";
+  };
 
   const setActiveModel = (val) => {
     if (val === undefined || val === null) return;
+    if (modelInput) {
+      modelInput.value = val;
+    }
     if (modelSelect) {
       let matched = false;
       for (let i = 0; i < modelSelect.options.length; i++) {
@@ -2222,9 +2247,17 @@ const initProviderConfig = () => {
     }
   };
 
-  const updateModelMode = () => {
-    if (modelSelectWrapper) modelSelectWrapper.style.display = "flex";
-    if (modelFieldLabel) modelFieldLabel.setAttribute("for", "model-select");
+  const updateModelMode = (providerKey) => {
+    const isLmStudio = providerKey === "lmstudio";
+    if (isLmStudio) {
+      if (modelSelectWrapper) modelSelectWrapper.style.display = "none";
+      if (modelInputWrapper) modelInputWrapper.style.display = "flex";
+      if (modelFieldLabel) modelFieldLabel.setAttribute("for", "model-input");
+    } else {
+      if (modelSelectWrapper) modelSelectWrapper.style.display = "flex";
+      if (modelInputWrapper) modelInputWrapper.style.display = "none";
+      if (modelFieldLabel) modelFieldLabel.setAttribute("for", "model-select");
+    }
   };
 
   const updateModelOptions = (providerKey, models, preferredModel) => {
@@ -2349,7 +2382,9 @@ const initProviderConfig = () => {
       syncConfigToServer();
     }
 
-    loadModelsDynamically(providerKey, false);
+    if (!config.customInput) {
+      loadModelsDynamically(providerKey, false);
+    }
   };
 
   toggleKeyBtn?.addEventListener("click", () => {
@@ -2371,13 +2406,21 @@ const initProviderConfig = () => {
     syncConfigToServer();
   });
 
+  modelInput?.addEventListener("input", () => {
+    saveConfigLocally();
+    syncConfigToServer();
+  });
+
   let keyDebounceTimer = null;
   apiKeyInput?.addEventListener("input", () => {
     saveConfigLocally();
     syncConfigToServer();
     clearTimeout(keyDebounceTimer);
     keyDebounceTimer = setTimeout(() => {
-      loadModelsDynamically(providerSelect.value, false);
+      const pCfg = PROVIDERS[providerSelect.value];
+      if (!pCfg?.customInput) {
+        loadModelsDynamically(providerSelect.value, false);
+      }
     }, 600);
   });
 

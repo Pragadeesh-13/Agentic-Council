@@ -29,6 +29,7 @@ def test_requires_key():
     assert requires_key({"provider": "openai"}) is True
     assert requires_key({"provider": "anthropic"}) is True
     assert requires_key({"provider": "groq"}) is True
+    assert requires_key({"provider": "lmstudio"}) is False
     assert requires_key({"provider": "mock"}) is False
     assert requires_key({"provider": "custom"}) is False
 

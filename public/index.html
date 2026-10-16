@@ -51,6 +51,7 @@
                     <option value="openai">OpenAI</option>
                     <option value="anthropic">Anthropic</option>
                     <option value="groq">Groq</option>
+                    <option value="lmstudio">LM Studio</option>
                   </select>
                 </div>
               </div>
@@ -59,11 +60,22 @@
                 <label for="model-select" class="config-label" id="model-field-label">
                   <span>Model</span>
                 </label>
-                <!-- Every provider exposes a catalogue, so this is always a dropdown. -->
+                <!-- Dropdown for cloud providers -->
                 <div class="config-select-wrapper" id="model-select-wrapper">
                   <select class="config-select" id="model-select">
                     <!-- Populated dynamically from the provider -->
                   </select>
+                </div>
+                <!-- Free-form text input for LM Studio -->
+                <div class="config-input-wrapper" id="model-input-wrapper" style="display: none;">
+                  <input
+                    type="text"
+                    class="config-input"
+                    id="model-input"
+                    placeholder="e.g. qwen2.5-7b-instruct, local-model"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
                 </div>
               </div>
 

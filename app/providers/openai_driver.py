@@ -28,6 +28,7 @@ CURATED_MODELS: Dict[str, List[str]] = {
         "llama-3.1-8b-instant",
         "mixtral-8x7b-32768",
     ],
+    "lmstudio": [],
 }
 
 
@@ -95,6 +96,8 @@ class OpenAiDriver(BaseLlmDriver):
             return "https://api.openai.com/v1"
         if self.provider == "groq":
             return "https://api.groq.com/openai/v1"
+        if self.provider == "lmstudio":
+            return "http://localhost:1235/v1"
         return "https://openrouter.ai/api/v1"
 
     def _build_headers(self, api_key_override: Optional[str] = None) -> Dict[str, str]:
@@ -102,6 +105,8 @@ class OpenAiDriver(BaseLlmDriver):
         headers = {"Content-Type": "application/json"}
         if key:
             headers["Authorization"] = f"Bearer {key}"
+        elif self.provider == "lmstudio":
+            headers["Authorization"] = "Bearer lm-studio"
         if self.provider == "openrouter":
             headers["HTTP-Referer"] = self.public_url
             headers["X-Title"] = "Policy Simulation"

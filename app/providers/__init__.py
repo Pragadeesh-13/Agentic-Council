@@ -9,6 +9,7 @@ PROVIDER_REGISTRY: Dict[str, Type[BaseLlmDriver]] = {
     "openai": OpenAiDriver,
     "groq": OpenAiDriver,
     "anthropic": AnthropicDriver,
+    "lmstudio": OpenAiDriver,
     "mock": MockDriver,
 }
 
@@ -17,6 +18,7 @@ PROVIDER_BASE_URLS: Dict[str, str] = {
     "openai": "https://api.openai.com/v1",
     "groq": "https://api.groq.com/openai/v1",
     "anthropic": "https://api.anthropic.com",
+    "lmstudio": "http://localhost:1235/v1",
 }
 
 
