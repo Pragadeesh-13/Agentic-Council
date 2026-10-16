@@ -364,8 +364,13 @@ const animateAgentEntryText = (entry, text, options = {}) => {
     return;
   }
 
-  if (state.shown.length > state.target.length || !state.target.startsWith(state.shown)) {
+  if (!state.shown || state.shown !== entry.textContent || state.shown.length > state.target.length || !state.target.startsWith(state.shown)) {
+    if (state.timer) {
+      clearInterval(state.timer);
+      state.timer = null;
+    }
     state.shown = "";
+    entry.innerHTML = "";
     entry.textContent = "";
   }
 
@@ -1422,22 +1427,30 @@ const upsertAgentStreamMessage = (payload) => {
   if (speechList) {
     let entry = agentStreamEntries.get(streamKey);
     if (!entry) {
-      entry = document.createElement("div");
-      entry.className = "agent-speech";
+      const loadingEntry = speechList.querySelector(".agent-speech.loading");
+      if (loadingEntry) {
+        entry = loadingEntry;
+      } else {
+        entry = document.createElement("div");
+        entry.className = "agent-speech";
+        speechList.appendChild(entry);
+      }
       if (label) {
         entry.classList.add(`speech-${label.toLowerCase().replace(/\s+/g, "-")}`);
       }
-      speechList.appendChild(entry);
       agentStreamEntries.set(streamKey, entry);
     }
 
     if (hasMessage) {
       removeStandingBy(card);
       entry.classList.remove("loading");
+      speechList.querySelectorAll(".agent-speech.loading").forEach((el) => {
+        if (el !== entry) el.remove();
+      });
       animateAgentEntryText(entry, `${roundLabel}${payload.message || ""}`);
     } else if (!entry.textContent || entry.classList.contains("loading")) {
       entry.classList.add("loading");
-      entry.textContent = "Council member is thinking...";
+      entry.innerHTML = `<span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
     }
   }
 
@@ -1480,12 +1493,26 @@ const upsertAgentMessage = (payload) => {
   if (speechList) {
     const label = payload.label || "";
     const roundLabel = label ? `${label}: ` : "";
-    const entry = document.createElement("div");
-    entry.className = "agent-speech";
-    if (label) {
-      entry.classList.add(`speech-${label.toLowerCase().replace(/\s+/g, "-")}`);
+    const streamKey = `${name}:${payload.round ?? ""}:${label}`;
+    let entry = agentStreamEntries.get(streamKey);
+    if (!entry) {
+      const loadingEntry = speechList.querySelector(".agent-speech.loading");
+      if (loadingEntry) {
+        entry = loadingEntry;
+      } else {
+        entry = document.createElement("div");
+        entry.className = "agent-speech";
+        speechList.appendChild(entry);
+      }
+      if (label) {
+        entry.classList.add(`speech-${label.toLowerCase().replace(/\s+/g, "-")}`);
+      }
+      agentStreamEntries.set(streamKey, entry);
     }
-    speechList.appendChild(entry);
+    entry.classList.remove("loading");
+    speechList.querySelectorAll(".agent-speech.loading").forEach((el) => {
+      if (el !== entry) el.remove();
+    });
     animateAgentEntryText(entry, `${roundLabel}${payload.message || ""}`);
   }
   if (nameEl && payload.state) {
@@ -1727,7 +1754,11 @@ const setSystemNoteLoading = (note, isLoading, message) => {
   }
   entry.classList.toggle("loading", Boolean(isLoading));
   if (message) {
-    entry.textContent = message;
+    if (isLoading) {
+      entry.innerHTML = `<span class="thinking-text">${message.replace(/\.{3,}$/, "")}</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+    } else {
+      entry.textContent = message;
+    }
   }
 };
 
@@ -1744,7 +1775,7 @@ const setOrchestratorWaiting = (isWaiting, message = "Waiting for system instruc
   if (isWaiting) {
     councilOrchestratorCardEl.classList.add("waiting");
     entry.classList.add("loading");
-    entry.textContent = message;
+    entry.innerHTML = `<span class="thinking-text">${message.replace(/\.{3,}$/, "")}</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
     councilOrchestratorCardEl.classList.remove("muted");
     updateCouncilEmptyState();
   } else {
@@ -1783,7 +1814,9 @@ const connectLiveStream = () => {
     return;
   }
 
-  const stream = new EventSource("/api/stream");
+  const token = localStorage.getItem("llmCouncilIdToken");
+  const streamUrl = token ? `/api/stream?token=${encodeURIComponent(token)}` : "/api/stream";
+  const stream = new EventSource(streamUrl);
   stream.addEventListener("open", () => {
     setTopic("Connected. Awaiting update");
     setStatusText(statusConnection, "connected");

@@ -1217,21 +1217,93 @@ body {
 
 .agent-speech.loading {
   position: relative;
-  padding-right: 36px;
+  background: #181818;
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.08);
+  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .agent-speech.loading::after {
-  content: "";
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid rgba(17, 17, 17, 0.45);
-  border-top-color: transparent;
-  transform: translateY(-50%);
-  animation: spin 0.8s linear infinite;
+  display: none !important;
+}
+
+.agent-speech.loading .thinking-text,
+.agent-speech.loading:not(:has(.thinking-text)) {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(255, 255, 255, 0.35) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: claude-shimmer-sweep 2s infinite ease-in-out;
+  letter-spacing: 0.2px;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+}
+
+@keyframes claude-shimmer-sweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.thinking-dots {
+  display: inline-flex;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 1.5px;
+  margin-left: 2px;
+}
+
+.thinking-dot {
+  opacity: 0;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+}
+
+.thinking-dot:nth-child(1) {
+  animation: dot-1-cycle 1.4s infinite;
+}
+
+.thinking-dot:nth-child(2) {
+  animation: dot-2-cycle 1.4s infinite;
+}
+
+.thinking-dot:nth-child(3) {
+  animation: dot-3-cycle 1.4s infinite;
+}
+
+/* 1 -> 2 -> 3 -> 1 -> 2 -> 3 loop */
+@keyframes dot-1-cycle {
+  0%, 100% {
+    opacity: 1;
+  }
+}
+
+@keyframes dot-2-cycle {
+  0%, 32% {
+    opacity: 0;
+  }
+  33%, 100% {
+    opacity: 1;
+  }
+}
+
+@keyframes dot-3-cycle {
+  0%, 65% {
+    opacity: 0;
+  }
+  66%, 100% {
+    opacity: 1;
+  }
 }
 
 .agent-card.muted .agent-speech {

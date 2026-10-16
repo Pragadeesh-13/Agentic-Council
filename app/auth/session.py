@@ -27,7 +27,10 @@ def extract_id_token(req: Request) -> Optional[str]:
     token = parse_bearer_token(auth_header)
     if token:
         return token
-    return req.cookies.get(SESSION_COOKIE)
+    cookie_token = req.cookies.get(SESSION_COOKIE)
+    if cookie_token:
+        return cookie_token
+    return req.query_params.get("token")
 
 
 class SessionGuard:

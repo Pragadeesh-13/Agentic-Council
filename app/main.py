@@ -261,7 +261,13 @@ async def next_policy(request: Request, query: str = ""):
         return {"ok": True, "started": False}
 
     if session.orchestrator.is_council_running():
-        return JSONResponse(status_code=409, content={"ok": False, "running": True, "error": "A council run is already in progress. Let it finish before starting another."})
+        # If the previous council was waiting at a barrier for user input, reset and allow the new simulation to proceed
+        if session.orchestrator.barrier and session.orchestrator.barrier.round_begin_waiters:
+            session.orchestrator.barrier.reset()
+            session.orchestrator.state.release()
+            await asyncio.sleep(0.05)
+        else:
+            return JSONResponse(status_code=409, content={"ok": False, "running": True, "error": "A council run is already in progress. Let it finish before starting another."})
 
     async def _run_flow():
         story = await session.orchestrator.summarise_policy(policy_query, driver=run_driver)
