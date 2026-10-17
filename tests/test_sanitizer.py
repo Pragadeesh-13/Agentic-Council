@@ -35,3 +35,20 @@ def test_format_debate_summary():
     summary = format_debate_summary(raw)
     assert "tax devolution" in summary
     assert "<thought>" not in summary
+
+
+def test_sanitize_dividers_and_public_speech_header():
+    raw = """<thought>
+Analyze: Who is your biggest threat?
+</thought>
+****
+
+(Public Speech)
+
+The positive declarations regarding IT hubs and petrochemical growth are impressive metrics for capital investors."""
+    cleaned = sanitize_model_output(raw)
+    assert "<thought>" not in cleaned
+    assert "</thought>" not in cleaned
+    assert "****" not in cleaned
+    assert "Public Speech" not in cleaned
+    assert cleaned.startswith("The positive declarations regarding IT hubs")

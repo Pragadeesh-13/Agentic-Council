@@ -1140,21 +1140,41 @@ body {
 }
 
 .feed-card.active {
-  background: var(--chat-pane-bg);
-  color: var(--text-primary);
-  border: 1px solid var(--chat-pane-border);
+  background: #ffffff !important;
+  color: #111111 !important;
+  border: 1px solid #e2e8f0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
+.feed-card.active h3,
+.feed-card.active h4 {
+  color: #111111 !important;
+}
+
+.feed-card.active p {
+  color: #475569 !important;
+}
+
+.feed-card.active .badge.badge-summarizing {
+  background: #0f172a;
+  color: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+}
+
 [data-theme="light"] .feed-card.active {
-  background: var(--chat-pane-bg);
-  color: var(--text-primary);
+  background: var(--chat-pane-bg) !important;
+  color: var(--text-primary) !important;
   border: 1px solid var(--chat-pane-border);
   box-shadow: none !important;
 }
 
-.feed-card.active p {
-  color: var(--muted);
+[data-theme="light"] .feed-card.active h3,
+[data-theme="light"] .feed-card.active h4 {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="light"] .feed-card.active p {
+  color: var(--muted) !important;
 }
 
 .feed-card h3,
@@ -1689,7 +1709,15 @@ body {
 
 .agent-speech.speech-right-of-reply {
   border-left: 3px solid rgba(252, 211, 77, 0.7);
-  background: #1a1a1a;
+  background: var(--speech-bg);
+}
+
+[data-theme="light"] .agent-speech.speech-right-of-reply {
+  background: var(--speech-bg);
+}
+
+[data-theme="light"] .agent-speech.speech-declaration {
+  border-left: 3px solid rgba(148, 163, 184, 0.6);
 }
 
 .agent-avatar {

@@ -75,7 +75,7 @@ const normalizeStateName = (value) => {
   return aliases[normalized] || normalized;
 };
 
-const getStateLayers = (stateName) => stateNameToLayers.get(stateName) || [];
+const getStateLayers = (stateName) => stateNameToLayers.get(normalizeStateName(stateName)) || [];
 
 const getCurrentTheme = () => {
   return document.documentElement.getAttribute("data-theme") || "dark";
@@ -141,7 +141,7 @@ const getNegativeStateStyle = (theme = getCurrentTheme()) => {
 const getActiveStateStyle = (theme = getCurrentTheme()) => {
   if (theme === "light") {
     return {
-      className: "state-path",
+      className: "state-path active",
       fillColor: "rgba(15, 23, 42, 0.18)",
       fillOpacity: 0.8,
       color: "rgba(15, 23, 42, 0.85)",
@@ -149,7 +149,7 @@ const getActiveStateStyle = (theme = getCurrentTheme()) => {
     };
   }
   return {
-    className: "state-path",
+    className: "state-path active",
     fillColor: "rgba(255, 255, 255, 0.45)",
     fillOpacity: 0.65,
     color: "rgba(255, 255, 255, 0.85)",
@@ -216,7 +216,6 @@ const stateLayer = L.geoJSON(null, {
 
     layer.on("click", () => {
       console.log(`State clicked: ${name}`);
-      layer.getElement()?.classList.toggle("active");
     });
 
     layer.on("mouseover", () => {
@@ -433,7 +432,16 @@ let currentSystemRound = null;
 let compactModeBtn = null;
 const roundContainers = new Map();
 const councilRoundContainers = new Map();
+const completedCouncilRounds = new Set();
 const roundTabLabels = new Map();
+
+function normalizeRoundId(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return Math.trunc(parsed);
+}
 
 const getRoundTabLabel = (roundId) => roundTabLabels.get(roundId) || `View round ${roundId}`;
 
@@ -655,13 +663,8 @@ const updateCouncilEmptyState = () => {
   if (!councilOrchestratorCardEl) {
     return;
   }
-  let messageCount = 0;
-  councilRoundContainers.forEach((entry) => {
-    messageCount += (entry.llm?.children?.length || 0) + (entry.others?.children?.length || 0);
-  });
-  const hasMessages = messageCount > 0;
-  const waitingVisible = councilOrchestratorCardEl.classList.contains("waiting");
-  councilOrchestratorCardEl.style.display = waitingVisible || (!hasMessages && !fetchLocked) ? "grid" : "none";
+  const hasRounds = councilRoundContainers.size > 0;
+  councilOrchestratorCardEl.style.display = hasRounds || fetchLocked ? "none" : "grid";
 };
 
 const setDebateLocked = (locked) => {
@@ -910,6 +913,39 @@ const ensureRoundContainer = (round) => {
   return payload;
 };
 
+function setRoundOrchestratorState(roundId, options = {}) {
+  const normId = normalizeRoundId(roundId);
+  if (normId === null) return;
+  let container = councilRoundContainers.get(normId);
+  if (!container) {
+    container = ensureCouncilRoundContainer(normId);
+  }
+  if (!container || !container.orchestrator) return;
+
+  const orchestrator = container.orchestrator;
+  const speechList = orchestrator.querySelector(".agent-speech-list");
+  if (!speechList) return;
+  let entry = speechList.querySelector(".agent-speech");
+  if (!entry) {
+    entry = document.createElement("div");
+    entry.className = "agent-speech";
+    speechList.appendChild(entry);
+  }
+
+  if (options.completed) {
+    completedCouncilRounds.add(normId);
+    orchestrator.classList.remove("waiting", "muted");
+    entry.classList.remove("loading");
+    entry.textContent = `Round ${normId} has been completed.`;
+  } else if (options.assessing) {
+    if (completedCouncilRounds.has(normId)) return;
+    orchestrator.classList.add("waiting");
+    orchestrator.classList.remove("muted");
+    entry.classList.add("loading");
+    entry.innerHTML = `<span style="display:inline-flex; align-items:center;"><span class="thinking-text">Councils are assessing</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span></span>`;
+  }
+}
+
 const ensureCouncilRoundContainer = (round) => {
   const roundId = normalizeRoundId(round);
   if (roundId === null) {
@@ -924,6 +960,14 @@ const ensureCouncilRoundContainer = (round) => {
   view.className = "council-round-view";
   view.dataset.round = String(roundId);
 
+  const orchestrator = createAgentCard({
+    name: "Council Orchestrator",
+    message: "",
+  });
+  orchestrator.classList.add("council-orchestrator");
+  orchestrator.classList.add("council");
+  view.appendChild(orchestrator);
+
   const llm = document.createElement("div");
   llm.className = "llm-messages";
   const others = document.createElement("div");
@@ -933,8 +977,16 @@ const ensureCouncilRoundContainer = (round) => {
   view.appendChild(others);
   councilRoundViewsContainer?.appendChild(view);
 
-  const payload = { roundId, view, llm, others };
+  const payload = { roundId, view, orchestrator, llm, others };
   councilRoundContainers.set(roundId, payload);
+
+  if (completedCouncilRounds.has(roundId)) {
+    setRoundOrchestratorState(roundId, { completed: true });
+  } else {
+    setRoundOrchestratorState(roundId, { assessing: true });
+  }
+
+  updateCouncilEmptyState();
   return payload;
 };
 
@@ -973,7 +1025,7 @@ const setRoundBeginControl = (roundId, options = {}) => {
   };
 
   if (options.showGoOnly) {
-    if (roundId > 0) setOrchestratorWaiting(true);
+    setRoundOrchestratorState(roundId, { assessing: true });
     appendGoToCurrentRoundButton();
     return;
   }
@@ -1003,7 +1055,7 @@ const setRoundBeginControl = (roundId, options = {}) => {
   btn.textContent = `Begin round ${roundId}`;
   btn.addEventListener("click", async () => {
     setActiveRound(roundId);
-    if (roundId > 0) setOrchestratorWaiting(false);
+    setRoundOrchestratorState(roundId, { assessing: true });
     systemRoundControlsContainer.innerHTML = "";
     const processingBtn = document.createElement("button");
     processingBtn.className = "begin-round-btn is-loading processing";
@@ -1027,7 +1079,7 @@ const setRoundBeginControl = (roundId, options = {}) => {
   });
 
   systemRoundControlsContainer.appendChild(btn);
-  if (roundId > 0) setOrchestratorWaiting(true);
+  setRoundOrchestratorState(roundId, { assessing: true });
 
   appendGoToCurrentRoundButton();
 };
@@ -1134,14 +1186,6 @@ const resetCouncilRoundWindow = () => {
   });
   councilRoundContainers.clear();
   updateCouncilEmptyState();
-};
-
-const normalizeRoundId = (value) => {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-  return Math.trunc(parsed);
 };
 
 const insertAgentCard = (card, round) => {
@@ -1294,6 +1338,7 @@ let isSummarizing = false;
 
 const showSummarizingState = (policyText) => {
   isSummarizing = true;
+  setOrchestratorWaiting(true, "Councils are assessing...");
   if (fetchNextBtn) {
     fetchNextBtn.disabled = true;
     fetchNextBtn.classList.add("is-loading");
@@ -1357,41 +1402,45 @@ const setActiveFeed = (story) => {
 
 let currentActiveStateName = null;
 
+const clearActiveState = () => {
+  currentActiveStateName = null;
+  if (!stateLayer || !stateLayer.eachLayer) return;
+  stateLayer.eachLayer((layer) => {
+    const element = layer.getElement();
+    if (element) {
+      element.classList.remove("active");
+    }
+    const name = layer.feature?.properties?.ST_NM || layer.feature?.properties?.NAME_1 || layer.feature?.properties?.state || layer.feature?.properties?.name || "Unknown";
+    const normalized = normalizeStateName(name);
+    const impact = stateImpact.get(normalized);
+    if (impact === "positive") {
+      layer.setStyle(getPositiveStateStyle());
+    } else if (impact === "negative") {
+      layer.setStyle(getNegativeStateStyle());
+    } else {
+      layer.setStyle(getBaseStateStyle());
+    }
+  });
+};
+
 const setActiveState = (stateName) => {
   const normalized = normalizeStateName(stateName);
   if (!normalized) return;
   if (currentActiveStateName === normalized) {
     return; // Already active; avoid resetting styles and restarting animation on every token
   }
-  currentActiveStateName = normalized;
 
-  stateLayer.eachLayer((layer) => {
-    const element = layer.getElement();
-    if (element?.classList.contains("active")) {
-      const currentName = normalizeStateName(element.__stateName || "");
-      const currentImpact = stateImpact.get(currentName);
-      const targets = getStateLayers(currentName);
-      targets.forEach((l) => {
-        if (currentImpact === "positive") {
-          l.setStyle(positiveStateStyle);
-        } else if (currentImpact === "negative") {
-          l.setStyle(negativeStateStyle);
-        } else {
-          l.setStyle(baseStateStyle);
-        }
-      });
-      element.classList.remove("active");
-    }
-  });
+  // Clear any previous active highlights so ONLY this state is highlighted
+  clearActiveState();
+  currentActiveStateName = normalized;
 
   const targets = getStateLayers(normalized);
   targets.forEach((layer) => {
     const element = layer.getElement();
     if (element) {
-      element.__stateName = stateName;
       element.classList.add("active");
     }
-    layer.setStyle(activeStateStyle);
+    layer.setStyle(getActiveStateStyle());
   });
 };
 
@@ -1412,7 +1461,7 @@ const setStateImpact = (stateName, impact) => {
   });
 };
 
-const createAgentCard = (agent) => {
+function createAgentCard(agent) {
   const card = document.createElement("div");
   card.className = "agent-card";
   card.dataset.agentName = agent?.name || "Council";
@@ -1571,9 +1620,13 @@ const resetCouncilDelayed = (agents = [], delayMs = 2000) => {
   currentSystemRound = null;
   roundContainers.clear();
   councilRoundContainers.clear();
+  completedCouncilRounds.clear();
   roundTabLabels.clear();
   ensureSystemNotesContainer();
   ensureAgentsContainer();
+  ensureCouncilRoundContainer(0);
+  setRoundOrchestratorState(0, { assessing: true });
+  setActiveRound(0);
   updateCouncilEmptyState();
   insertAgentCard(createBootingCard(), 0);
   let loadedCount = 0;
@@ -1772,7 +1825,14 @@ const upsertAgentStreamMessage = (payload) => {
       }
       const decisionBody = decisionBlock.querySelector(".agent-decision-body");
       if (decisionBody && payload.delta) {
-        decisionBody.textContent += payload.delta;
+        const cleanDelta = payload.delta.replace(/<\/?(?:thought|think)\b[^>]*>/gi, "");
+        if (cleanDelta) {
+          decisionBody.textContent += cleanDelta;
+          decisionBody.textContent = decisionBody.textContent
+            .replace(/^\s*(?:\*{3,}|-{3,}|_{3,})\s*/g, "")
+            .replace(/^\s*(?:(?:\*{1,2}|\[|\()?\s*(?:Public\s+)?(?:Speech|Statement|Verdict|Decision)\s*(?:\([^)]*\))?\s*(?:\*{1,2}|\]|\))?\s*:?\s*)/gi, "")
+            .replace(/^\s*(?:\*{3,}|-{3,}|_{3,})\s*/g, "");
+        }
       }
     } else if (eventType === "end" || payload.message) {
       entry.classList.remove("loading");
@@ -2188,7 +2248,12 @@ const setSystemNoteLoading = (note, isLoading, message) => {
   }
 };
 
-const setOrchestratorWaiting = (isWaiting, message = "Waiting for system instructions...") => {
+const setOrchestratorWaiting = (isWaiting, message = "Councils are assessing...") => {
+  if (currentSystemRound !== null) {
+    if (isWaiting) {
+      setRoundOrchestratorState(currentSystemRound, { assessing: true });
+    }
+  }
   if (!councilOrchestratorCardEl) return;
   const speechList = councilOrchestratorCardEl.querySelector(".agent-speech-list");
   if (!speechList) return;
@@ -2201,17 +2266,13 @@ const setOrchestratorWaiting = (isWaiting, message = "Waiting for system instruc
   if (isWaiting) {
     councilOrchestratorCardEl.classList.add("waiting");
     entry.classList.add("loading");
-    entry.innerHTML = `<span class="thinking-text">${message.replace(/\.{3,}$/, "")}</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+    entry.innerHTML = `<span style="display:inline-flex; align-items:center;"><span class="thinking-text">${message.replace(/\.{3,}$/, "")}</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span></span>`;
     councilOrchestratorCardEl.classList.remove("muted");
-    updateCouncilEmptyState();
   } else {
     councilOrchestratorCardEl.classList.remove("waiting");
     entry.classList.remove("loading");
-    if (!entry.textContent || /waiting for system instructions/i.test(entry.textContent)) {
-      entry.textContent = "Standing by...";
-    }
-    updateCouncilEmptyState();
   }
+  updateCouncilEmptyState();
 };
 
 const clearDebateLoading = (payload) => {
@@ -2322,8 +2383,13 @@ const connectLiveStream = () => {
     if (activeSystemRound === null) {
       setActiveRound(roundId);
     }
+    clearActiveState();
 
-    setOrchestratorWaiting(true);
+    for (let r = 0; r < roundId; r++) {
+      setRoundOrchestratorState(r, { completed: true });
+    }
+    setRoundOrchestratorState(roundId, { assessing: true });
+    setOrchestratorWaiting(true, "Councils are assessing...");
 
     analysisPendingRounds.add(roundId);
     if (roundPayload?.tab) {
@@ -2341,7 +2407,7 @@ const connectLiveStream = () => {
     }
 
     if ((systemRoundPending.get(roundId) || 0) > 0) {
-      setOrchestratorWaiting(true);
+      setOrchestratorWaiting(true, "Councils are assessing...");
     }
 
     if (roundId === 0 && !councilsBooted) {
@@ -2350,7 +2416,7 @@ const connectLiveStream = () => {
       setRoundBeginControl(roundId, { processing: true, processingMessage: "Preparing Verdict..." });
     } else {
       pendingRoundBeginControls.add(roundId);
-      if (roundId > 0) setOrchestratorWaiting(true);
+      setRoundOrchestratorState(roundId, { assessing: true });
       flushDeferredRoundUi();
     }
   });
@@ -2370,15 +2436,6 @@ const connectLiveStream = () => {
             color: "rgba(255, 255, 255, 0.06)",
             weight: 0.8,
           });
-        });
-      });
-    }
-    if (data.selected) {
-      data.selected.forEach((stateName) => {
-        const normalized = normalizeStateName(stateName);
-        const targets = getStateLayers(normalized);
-        targets.forEach((layer) => {
-          layer.setStyle(activeStateStyle);
         });
       });
     }
@@ -2403,11 +2460,15 @@ const connectLiveStream = () => {
 
   stream.addEventListener("round_summary", (event) => {
     const data = JSON.parse(event.data);
+    clearActiveState();
+    const roundId = normalizeRoundId(data.round);
+    if (roundId !== null) {
+      setRoundOrchestratorState(roundId, { completed: true });
+    }
     const isCompact = Boolean(layoutElement?.classList.contains("compact-mode"));
     if (!isCompact || !data?.message) {
       return;
     }
-    const roundId = normalizeRoundId(data.round);
     if (roundId === null) {
       return;
     }
@@ -2446,7 +2507,10 @@ const connectLiveStream = () => {
 
   stream.addEventListener("council_end", (event) => {
     const data = JSON.parse(event.data);
-    const resultRoundId = normalizeRoundId(data.round);
+    const resultRoundId = normalizeRoundId(data.round) ?? 4;
+    for (let r = 0; r <= resultRoundId; r++) {
+      setRoundOrchestratorState(r, { completed: true });
+    }
     if (resultRoundId === 4) {
       roundTabLabels.set(4, "Verdict");
       updateRoundTabMarkers();
@@ -3018,33 +3082,6 @@ const initProviderConfig = () => {
       }
     }, 600);
   });
-
-  const reasoningToggle = document.getElementById("show-reasoning-toggle");
-  const reasoningBadge = document.getElementById("reasoning-badge");
-
-  const updateReasoningBadge = (enabled) => {
-    if (reasoningBadge) {
-      reasoningBadge.textContent = enabled ? "Active" : "Off";
-      if (enabled) {
-        reasoningBadge.classList.add("badge-active");
-      } else {
-        reasoningBadge.classList.remove("badge-active");
-      }
-    }
-  };
-
-  if (reasoningToggle) {
-    reasoningToggle.addEventListener("change", () => {
-      const isEnabled = Boolean(reasoningToggle.checked);
-      updateReasoningBadge(isEnabled);
-      fetch("/api/config", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ showReasoning: isEnabled }),
-      }).catch((err) => console.error("Failed to update reasoning setting:", err));
-    });
-  }
-
   // Do not default select any provider or model
   providerSelect.value = "";
   applyProvider("", true);
@@ -3056,13 +3093,6 @@ const initProviderConfig = () => {
         return null;
       }
       return r.json();
-    })
-    .then((cfg) => {
-      if (!cfg) return;
-      if (reasoningToggle && typeof cfg.showReasoning === "boolean") {
-        reasoningToggle.checked = cfg.showReasoning;
-        updateReasoningBadge(cfg.showReasoning);
-      }
     })
     .catch(() => {});
 };

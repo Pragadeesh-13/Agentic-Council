@@ -46,7 +46,7 @@ class Settings(BaseModel):
     )
     llm_think: str = Field(default_factory=lambda: os.getenv("LLM_THINK", "auto"))
     show_reasoning: bool = Field(
-        default_factory=lambda: os.getenv("SHOW_REASONING", os.getenv("LLM_SHOW_REASONING", "false")).lower() in ("true", "1", "yes")
+        default_factory=lambda: os.getenv("SHOW_REASONING", os.getenv("LLM_SHOW_REASONING", "true")).lower() in ("true", "1", "yes")
     )
     public_url: str = Field(default_factory=lambda: os.getenv("PUBLIC_URL", "http://localhost:3000"))
     trust_proxy_tls: bool = Field(

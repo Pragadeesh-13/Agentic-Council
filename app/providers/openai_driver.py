@@ -4,6 +4,7 @@ import re
 from typing import List, Dict, Any, Callable, Optional, Union
 import httpx
 from app.providers.base_driver import BaseLlmDriver
+from app.utils.thought_buffer import ThoughtBuffer
 
 logger = logging.getLogger("provider:openai")
 
@@ -207,9 +208,11 @@ class OpenAiDriver(BaseLlmDriver):
                 opts["useMaxCompletionTokens"] = True
             body = self._build_request_body(messages, max_tokens, opts, include_think=include_think, stream=True)
 
-            full_text = ""
             reasoning_text = ""
-            in_inline_think = False
+            tb = ThoughtBuffer(
+                on_delta=lambda full, chunk: on_delta(chunk) if on_delta else None,
+                on_reasoning_delta=lambda full, chunk: on_reasoning_delta(chunk) if on_reasoning_delta else None,
+            )
 
             async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_sec, read=self.stream_idle_timeout_sec)) as client:
                 async with client.stream("POST", endpoint, headers=headers, json=body) as res:
@@ -242,42 +245,17 @@ class OpenAiDriver(BaseLlmDriver):
                                 if on_reasoning_delta:
                                     on_reasoning_delta(r_chunk)
 
-                            # 2. Content tokens (handling potential inline <think> tags)
+                            # 2. Content tokens (handled robustly by ThoughtBuffer)
                             c_chunk = delta.get("content") or ""
                             if c_chunk:
-                                if "<think>" in c_chunk or "<thought>" in c_chunk:
-                                    in_inline_think = True
-                                    parts = re.split(r"<(?:think|thought)>", c_chunk, maxsplit=1)
-                                    if parts[0]:
-                                        full_text += parts[0]
-                                        if on_delta:
-                                            on_delta(parts[0])
-                                    if len(parts) > 1 and parts[1]:
-                                        reasoning_text += parts[1]
-                                        if on_reasoning_delta:
-                                            on_reasoning_delta(parts[1])
-                                elif in_inline_think:
-                                    if "</think>" in c_chunk or "</thought>" in c_chunk:
-                                        in_inline_think = False
-                                        parts = re.split(r"<\/(?:think|thought)>", c_chunk, maxsplit=1)
-                                        if parts[0]:
-                                            reasoning_text += parts[0]
-                                            if on_reasoning_delta:
-                                                on_reasoning_delta(parts[0])
-                                        if len(parts) > 1 and parts[1]:
-                                            full_text += parts[1]
-                                            if on_delta:
-                                                on_delta(parts[1])
-                                    else:
-                                        reasoning_text += c_chunk
-                                        if on_reasoning_delta:
-                                            on_reasoning_delta(c_chunk)
-                                else:
-                                    full_text += c_chunk
-                                    if on_delta:
-                                        on_delta(c_chunk)
+                                tb.feed(c_chunk)
                         except Exception:
                             continue
+
+            tb.flush()
+            full_text = tb.public_buffer
+            if tb.reasoning_buffer:
+                reasoning_text += tb.reasoning_buffer
 
             if not full_text.strip() and reasoning_text.strip():
                 draft_match = re.findall(r"(?:Draft\s*\d*|Final|Response|Output|Summary):\s*([^\n]+(?:\n[^\n]+)?)", reasoning_text, re.IGNORECASE)

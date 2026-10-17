@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 
 from app.utils.sanitizer import sanitize_model_output, format_debate_summary
 from app.utils.json_extractor import parse_json
+from app.utils.thought_buffer import ThoughtBuffer
 from app.personas.roster_builder import build_agent_roster
 from app.personas.state_profiles import DEFAULT_COUNCIL_STATES
 from app.simulation.keyword_analyzer import classify_impact_by_keywords
@@ -285,23 +286,25 @@ class CouncilOrchestrator:
         d = self._active_driver()
 
         if use_stream:
-            full_text = ""
-            full_reasoning = ""
+            tb = ThoughtBuffer(
+                on_delta=lambda full, chunk: self.sse.broadcast("agent_delta", {**payload_base, "delta": chunk}),
+                on_reasoning_delta=lambda full, chunk: (
+                    self.sse.broadcast("agent_reasoning_delta", {**payload_base, "delta": chunk})
+                    if show_reasoning else None
+                ),
+            )
 
             def on_delta(delta: str):
-                nonlocal full_text
-                full_text += delta
-                self.sse.broadcast("agent_delta", {**payload_base, "delta": delta})
+                tb.feed(delta)
 
             def on_reasoning_delta(r_delta: str):
-                nonlocal full_reasoning
-                full_reasoning += r_delta
-                if show_reasoning:
-                    self.sse.broadcast("agent_reasoning_delta", {**payload_base, "delta": r_delta})
+                tb.feed_reasoning(r_delta)
 
             try:
                 await d.stream(messages, max_tokens, on_delta=on_delta, on_reasoning_delta=on_reasoning_delta)
-                cleaned = sanitize_model_output(full_text)
+                tb.flush()
+                cleaned = sanitize_model_output(tb.public_buffer)
+                full_reasoning = tb.reasoning_buffer.strip()
                 self.sse.broadcast("agent", {
                     **payload_base,
                     "message": cleaned,
@@ -317,7 +320,13 @@ class CouncilOrchestrator:
             try:
                 res = await d.complete(messages, max_tokens)
                 cleaned = sanitize_model_output(res)
-                self.sse.broadcast("agent", {**payload_base, "message": cleaned})
+                thought_match = re.search(r"<(?:thought|think)\b[^>]*>([\s\S]*?)<\/(?:thought|think)>", res, re.IGNORECASE)
+                extracted_reasoning = thought_match.group(1).strip() if thought_match else ""
+                self.sse.broadcast("agent", {
+                    **payload_base,
+                    "message": cleaned,
+                    "reasoning": extracted_reasoning if show_reasoning else "",
+                })
                 return cleaned
             except Exception as e:
                 logger.error(f"Agent completion failed for {agent['state']}: {e}")

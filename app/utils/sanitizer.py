@@ -57,6 +57,22 @@ def sanitize_model_output(text: str) -> str:
     if not clean:
         return ""
 
+    # Strip transition dividers like ****, ---, ___
+    clean = re.sub(r"^\s*(?:\*{3,}|-{3,}|_{3,})\s*", "", clean)
+
+    # Strip speech section headers like (Public Speech), **Public Speech:**, etc.
+    clean = re.sub(
+        r"^\s*(?:(?:\*{1,2}|\[|\()?\s*(?:Public\s+)?(?:Speech|Statement|Verdict|Decision)\s*(?:\([^)]*\))?\s*(?:\*{1,2}|\]|\))?\s*:?\s*)",
+        "",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    clean = re.sub(r"^\s*(?:\*{3,}|-{3,}|_{3,})\s*", "", clean)
+
+    clean = clean.strip()
+    if not clean:
+        return ""
+
     clean = INLINE_PREAMBLE_REGEX.sub("", clean)
     clean = STANDALONE_STANCE_INTRO.sub("", clean)
     clean = clean.strip()
