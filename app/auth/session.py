@@ -36,6 +36,15 @@ def extract_id_token(req: Request) -> Optional[str]:
 class SessionGuard:
     def __init__(self, mode: Optional[str] = None):
         self._mode = mode.lower() if mode else None
+        self._sessions: Dict[str, Dict[str, Any]] = {}
+
+    def register_session(self, token: str, user: Dict[str, Any]):
+        if token and user:
+            self._sessions[token] = user
+
+    def revoke_session(self, token: str):
+        if token in self._sessions:
+            del self._sessions[token]
 
     @property
     def mode(self) -> str:
@@ -56,6 +65,9 @@ class SessionGuard:
             if self.mode in ("open", "optional"):
                 return {"ok": True, "user": None, "status": 200}
             return {"ok": False, "user": None, "status": 401, "error": "Authentication required"}
+
+        if token in self._sessions:
+            return {"ok": True, "status": 200, "user": self._sessions[token]}
 
         # Basic token projection for guest/offline sessions
         return {

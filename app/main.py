@@ -233,15 +233,24 @@ async def next_policy(request: Request, query: str = ""):
     policy_query = (body.get("query") if isinstance(body, dict) and body.get("query") is not None else query) or ""
     policy_query = str(policy_query).strip()
 
-    provider = str(body.get("provider") or sess_cfg["provider"]).strip().lower()
-    api_key = str(body.get("apiKey") if body.get("apiKey") is not None else sess_cfg["apiKey"]).strip()
-    model = str(body.get("model") if body.get("model") is not None else sess_cfg["model"]).strip()
+    if not policy_query:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "Policy details have not been entered."})
+
+    provider = str(body.get("provider") if body.get("provider") is not None else sess_cfg.get("provider", "")).strip().lower()
+    api_key = str(body.get("apiKey") if body.get("apiKey") is not None else sess_cfg.get("apiKey", "")).strip()
+    model = str(body.get("model") if body.get("model") is not None else sess_cfg.get("model", "")).strip()
+
+    if not provider:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "Provider has not been selected."})
 
     if provider not in PROVIDER_REGISTRY:
         return JSONResponse(status_code=400, content={"ok": False, "error": f"Unsupported provider '{provider}'."})
 
+    if not model:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "Model has not been selected."})
+
     if requires_key({"provider": provider}) and not api_key:
-        return JSONResponse(status_code=400, content={"ok": False, "error": f"API key is mandatory for {provider} before beginning the round."})
+        return JSONResponse(status_code=400, content={"ok": False, "error": "API key has not been entered."})
 
     user = getattr(request.state, "session_user", None)
     await key_vault.put(user, {"provider": provider, "model": model, "apiKey": api_key})
@@ -256,10 +265,6 @@ async def next_policy(request: Request, query: str = ""):
         stream_idle_timeout_ms=settings.llm_stream_idle_timeout_ms,
     )
 
-    if not policy_query:
-        session.sse_manager.notify_status("Enter policy details to begin the simulation.")
-        return {"ok": True, "started": False}
-
     if session.orchestrator.is_council_running():
         # If the previous council was waiting at a barrier for user input, reset and allow the new simulation to proceed
         if session.orchestrator.barrier and session.orchestrator.barrier.round_begin_waiters:
@@ -270,6 +275,7 @@ async def next_policy(request: Request, query: str = ""):
             return JSONResponse(status_code=409, content={"ok": False, "running": True, "error": "A council run is already in progress. Let it finish before starting another."})
 
     async def _run_flow():
+        session.sse_manager.broadcast("policy_summarizing", {"query": policy_query})
         story = await session.orchestrator.summarise_policy(policy_query, driver=run_driver)
         if story:
             await session.orchestrator.run_council(story, driver=run_driver)
@@ -320,9 +326,6 @@ async def post_config(request: Request):
 
     model = str(body.get("model") if body.get("model") is not None else sess_cfg["model"]).strip()
     api_key = str(body.get("apiKey") if body.get("apiKey") is not None else sess_cfg["apiKey"]).strip()
-
-    if requires_key({"provider": provider}) and not api_key:
-        return JSONResponse(status_code=400, content={"ok": False, "error": f"An API key is required for {provider}."})
 
     user = getattr(request.state, "session_user", None)
     saved = await key_vault.put(user, {"provider": provider, "model": model, "apiKey": api_key})
@@ -403,8 +406,10 @@ async def login(request: Request):
         "fullName": username.capitalize(),
         "email": f"{username}@council.local",
     }
+    session_token = f"token_{username}"
+    guard.register_session(session_token, user)
     response = JSONResponse(status_code=200, content={"ok": True, "user": user})
-    response.set_cookie(key="__session", value=f"token_{username}", path="/", max_age=43200, samesite="lax")
+    response.set_cookie(key="__session", value=session_token, path="/", max_age=43200, samesite="lax")
     return response
 
 
@@ -426,9 +431,23 @@ async def google_auth(request: Request):
         "fullName": full_name,
         "email": email,
     }
+    guard.register_session(id_token, user)
     response = JSONResponse(status_code=200, content={"ok": True, "user": user, "idToken": id_token})
     response.set_cookie(key="__session", value=id_token, path="/", max_age=43200, samesite="lax")
     return response
+
+
+@app.get("/api/auth/me")
+async def get_me(request: Request):
+    user = getattr(request.state, "session_user", None)
+    if not user:
+        from app.auth.session import extract_id_token
+        auth_res = await guard.authenticate(request)
+        if auth_res.get("ok") and auth_res.get("user"):
+            user = auth_res.get("user")
+    if not user:
+        return JSONResponse(status_code=401, content={"ok": False, "error": "Not authenticated"})
+    return {"ok": True, "user": user}
 
 
 @app.delete("/api/auth/keys")
@@ -469,7 +488,11 @@ if os.path.isdir(PUBLIC_DIR):
         return FileResponse(os.path.join(PUBLIC_DIR, "signup.html"))
 
     @app.get("/logout")
-    async def logout():
+    async def logout(request: Request):
+        from app.auth.session import extract_id_token
+        token = extract_id_token(request)
+        if token:
+            guard.revoke_session(token)
         response = RedirectResponse(url="/login.html", status_code=302)
         response.delete_cookie(key="__session", path="/")
         return response

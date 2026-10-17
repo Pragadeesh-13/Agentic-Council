@@ -24,8 +24,8 @@ if __name__ == "__main__":
     target_port = settings.port
     if is_port_in_use(target_port):
         alt_port = find_available_port(target_port + 1)
-        print(f"⚠️ Port {target_port} is already in use by another process.")
-        print(f"➡️ Switching to available port: {alt_port}")
+        print(f"[!] Port {target_port} is already in use by another process.")
+        print(f"--> Switching to available port: {alt_port}")
         target_port = alt_port
 
     print(f"Starting LLM Council on port {target_port} (auth_mode: {settings.auth_mode})...")

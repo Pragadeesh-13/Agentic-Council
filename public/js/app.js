@@ -20,6 +20,12 @@ const map = L.map("india-map", {
   zoomDelta: 0.25,
   inertia: false,
   preferCanvas: false,
+  dragging: false,
+  scrollWheelZoom: false,
+  doubleClickZoom: false,
+  touchZoom: false,
+  boxZoom: false,
+  keyboard: false,
 });
 
 const mapContainer = document.getElementById("india-map");
@@ -71,40 +77,134 @@ const normalizeStateName = (value) => {
 
 const getStateLayers = (stateName) => stateNameToLayers.get(stateName) || [];
 
-const baseStateStyle = {
-  className: "state-path",
-  fillColor: "#090909",
-  fillOpacity: 0.28,
-  color: "rgba(255, 255, 255, 0.15)",
-  weight: 1.2,
+const getCurrentTheme = () => {
+  return document.documentElement.getAttribute("data-theme") || "dark";
 };
 
-const positiveStateStyle = {
-  className: "state-path",
-  fillColor: "rgba(56, 204, 118, 0.55)",
-  fillOpacity: 0.6,
-  color: "rgba(56, 204, 118, 0.9)",
-  weight: 1.4,
+const getBaseStateStyle = (theme = getCurrentTheme()) => {
+  if (theme === "light") {
+    return {
+      className: "state-path",
+      fillColor: "#ffffff",
+      fillOpacity: 0.75,
+      color: "rgba(71, 85, 105, 0.45)",
+      weight: 1.2,
+    };
+  }
+  return {
+    className: "state-path",
+    fillColor: "#090909",
+    fillOpacity: 0.28,
+    color: "rgba(255, 255, 255, 0.15)",
+    weight: 1.2,
+  };
 };
 
-const negativeStateStyle = {
-  className: "state-path",
-  fillColor: "rgba(230, 74, 74, 0.55)",
-  fillOpacity: 0.6,
-  color: "rgba(230, 74, 74, 0.9)",
-  weight: 1.4,
+const getPositiveStateStyle = (theme = getCurrentTheme()) => {
+  if (theme === "light") {
+    return {
+      className: "state-path",
+      fillColor: "rgba(34, 197, 94, 0.4)",
+      fillOpacity: 0.7,
+      color: "rgba(22, 163, 74, 0.95)",
+      weight: 1.4,
+    };
+  }
+  return {
+    className: "state-path",
+    fillColor: "rgba(56, 204, 118, 0.55)",
+    fillOpacity: 0.6,
+    color: "rgba(56, 204, 118, 0.9)",
+    weight: 1.4,
+  };
 };
 
-const activeStateStyle = {
-  className: "state-path",
-  fillColor: "rgba(255, 255, 255, 0.45)",
-  fillOpacity: 0.65,
-  color: "rgba(255, 255, 255, 0.85)",
-  weight: 1.8,
+const getNegativeStateStyle = (theme = getCurrentTheme()) => {
+  if (theme === "light") {
+    return {
+      className: "state-path",
+      fillColor: "rgba(239, 68, 68, 0.4)",
+      fillOpacity: 0.7,
+      color: "rgba(220, 38, 38, 0.95)",
+      weight: 1.4,
+    };
+  }
+  return {
+    className: "state-path",
+    fillColor: "rgba(230, 74, 74, 0.55)",
+    fillOpacity: 0.6,
+    color: "rgba(230, 74, 74, 0.9)",
+    weight: 1.4,
+  };
+};
+
+const getActiveStateStyle = (theme = getCurrentTheme()) => {
+  if (theme === "light") {
+    return {
+      className: "state-path",
+      fillColor: "rgba(15, 23, 42, 0.18)",
+      fillOpacity: 0.8,
+      color: "rgba(15, 23, 42, 0.85)",
+      weight: 1.8,
+    };
+  }
+  return {
+    className: "state-path",
+    fillColor: "rgba(255, 255, 255, 0.45)",
+    fillOpacity: 0.65,
+    color: "rgba(255, 255, 255, 0.85)",
+    weight: 1.8,
+  };
+};
+
+// Proxies so any direct reference to baseStateStyle/positiveStateStyle gets current theme values automatically
+const baseStateStyle = new Proxy({}, {
+  get(target, prop) {
+    return getBaseStateStyle()[prop];
+  }
+});
+
+const positiveStateStyle = new Proxy({}, {
+  get(target, prop) {
+    return getPositiveStateStyle()[prop];
+  }
+});
+
+const negativeStateStyle = new Proxy({}, {
+  get(target, prop) {
+    return getNegativeStateStyle()[prop];
+  }
+});
+
+const activeStateStyle = new Proxy({}, {
+  get(target, prop) {
+    return getActiveStateStyle()[prop];
+  }
+});
+
+const updateMapTheme = (theme = getCurrentTheme()) => {
+  if (!stateLayer || !stateLayer.eachLayer) return;
+  stateLayer.eachLayer((layer) => {
+    const isStateActive = layer.getElement()?.classList.contains("active");
+    if (isStateActive) {
+      layer.setStyle(getActiveStateStyle(theme));
+      return;
+    }
+    const name = layer.feature?.properties?.ST_NM || layer.feature?.properties?.NAME_1 || layer.feature?.properties?.state || layer.feature?.properties?.name || "Unknown";
+    const normalized = normalizeStateName(name);
+    const impact = stateImpact.get(normalized);
+    if (impact === "positive") {
+      layer.setStyle(getPositiveStateStyle(theme));
+    } else if (impact === "negative") {
+      layer.setStyle(getNegativeStateStyle(theme));
+    } else {
+      layer.setStyle(getBaseStateStyle(theme));
+    }
+  });
 };
 
 const stateLayer = L.geoJSON(null, {
-  style: baseStateStyle,
+  style: () => getBaseStateStyle(),
   onEachFeature: (feature, layer) => {
     console.log(`[MAP LOAD] Properties:`, feature.properties);
     const name = feature.properties?.ST_NM || feature.properties?.NAME_1 || feature.properties?.state || feature.properties?.name || "Unknown";
@@ -160,14 +260,22 @@ fetch(STATES_GEOJSON_URL)
       "<div style='color:#777;padding:20px;font-size:12px;'>Map data failed to load.</div>";
   });
 
-const resizeObserver = new ResizeObserver(() => {
-  map.invalidateSize();
-  if (stateLayer.getLayers().length) {
-    map.fitBounds(stateLayer.getBounds(), {
-      padding: [16, 16],
-      maxZoom: map.getZoom(),
-    });
+const fitMapBounds = () => {
+  if (stateLayer && stateLayer.getLayers().length) {
+    try {
+      map.invalidateSize();
+      map.fitBounds(stateLayer.getBounds(), {
+        padding: [16, 16],
+        maxZoom: 6.5,
+        animate: false,
+      });
+    } catch (e) {
+    }
   }
+};
+
+const resizeObserver = new ResizeObserver(() => {
+  fitMapBounds();
 });
 
 resizeObserver.observe(mapContainer);
@@ -409,12 +517,16 @@ const setFeedCollapsed = (collapsed) => {
     toggleBtn.setAttribute("aria-label", collapsed ? "Expand feed panel" : "Collapse feed panel");
     toggleBtn.setAttribute("title", collapsed ? "Expand feed panel" : "Collapse feed panel");
   }
-  setTimeout(() => {
-    try {
-      map.invalidateSize();
-    } catch (e) {
+  
+  // Continuously sync and fit map canvas through the 400ms CSS grid transition
+  const startTime = performance.now();
+  const stepMap = (now) => {
+    fitMapBounds();
+    if (now - startTime < 450) {
+      requestAnimationFrame(stepMap);
     }
-  }, 120);
+  };
+  requestAnimationFrame(stepMap);
 };
 
 const setCompactMode = (enabled) => {
@@ -424,21 +536,41 @@ const setCompactMode = (enabled) => {
   layoutElement.classList.toggle("compact-mode", Boolean(enabled));
   try {
     document.body.classList.toggle("compact-mode", Boolean(enabled));
-  } catch (e) {
-  }
+  } catch (e) {}
 
   if (enabled) {
     layoutElement.classList.remove("feed-collapsed");
   }
+
   if (compactModeBtn) {
-    compactModeBtn.textContent = enabled ? "Full View" : "Compact View";
-  }
-  setTimeout(() => {
-    try {
-      map.invalidateSize();
-    } catch (e) {
+    compactModeBtn.classList.toggle("is-active", Boolean(enabled));
+    compactModeBtn.setAttribute("aria-pressed", String(Boolean(enabled)));
+    compactModeBtn.setAttribute("aria-label", enabled ? "Switch to full view" : "Switch to compact mode");
+    compactModeBtn.setAttribute("title", enabled ? "Full View" : "Compact View");
+
+    const label = compactModeBtn.querySelector(".compact-btn-label");
+    if (label) {
+      label.style.opacity = "0";
+      label.style.transform = "translateY(-3px)";
+      setTimeout(() => {
+        label.textContent = enabled ? "Full View" : "Compact View";
+        label.style.opacity = "1";
+        label.style.transform = "translateY(0)";
+      }, 140);
+    } else {
+      compactModeBtn.textContent = enabled ? "Full View" : "Compact View";
     }
-  }, 120);
+  }
+
+  // Smoothly sync and resize map canvas across the entire 480ms transition
+  const startTime = performance.now();
+  const stepMap = (now) => {
+    fitMapBounds();
+    if (now - startTime < 480) {
+      requestAnimationFrame(stepMap);
+    }
+  };
+  requestAnimationFrame(stepMap);
 };
 
 const initCompactModeToggle = () => {
@@ -449,13 +581,24 @@ const initCompactModeToggle = () => {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "status-item compact-mode-btn";
-  button.textContent = "Compact View";
   button.setAttribute("aria-label", "Switch to compact mode");
+  button.innerHTML = `
+    <svg class="compact-btn-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+      <line x1="12" y1="3" x2="12" y2="21"></line>
+    </svg>
+    <span class="compact-btn-label">Compact View</span>
+  `;
   button.addEventListener("click", () => {
     const enabled = layoutElement.classList.contains("compact-mode");
     setCompactMode(!enabled);
   });
-  compactContainer.appendChild(button);
+  const profileMenu = compactContainer.querySelector(".user-profile-menu");
+  if (profileMenu) {
+    compactContainer.insertBefore(button, profileMenu);
+  } else {
+    compactContainer.appendChild(button);
+  }
   compactModeBtn = button;
 };
 
@@ -469,6 +612,11 @@ const initFeedCollapseToggle = () => {
   toggleBtn.className = "feed-collapse-btn";
   toggleBtn.setAttribute("aria-label", "Collapse feed panel");
   toggleBtn.setAttribute("title", "Collapse feed panel");
+  toggleBtn.innerHTML = `
+    <svg class="feed-collapse-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"></polyline>
+    </svg>
+  `;
   toggleBtn.addEventListener("click", () => {
     const collapsed = layoutElement.classList.contains("feed-collapsed");
     setFeedCollapsed(!collapsed);
@@ -568,7 +716,13 @@ initFeedCollapseToggle();
 initCompactModeToggle();
 updateFeedEmptyState();
 autoResizeTopicInput();
-topicInput?.addEventListener("input", autoResizeTopicInput);
+topicInput?.addEventListener("input", () => {
+  autoResizeTopicInput();
+  if (topicInput.value.trim()) {
+    clearInputError(topicInput);
+    dismissTopWarning();
+  }
+});
 
 const ensureDeliberationPanels = () => {
   if (
@@ -947,7 +1101,7 @@ const ensureAgentsContainer = () => {
     message: "",
   });
   orchestrator.classList.add("council-orchestrator");
-  orchestrator.classList.add("system");
+  orchestrator.classList.add("council");
   container.appendChild(orchestrator);
   streamCardMessage(orchestrator, "Begin a simulation to see the council's responses.", {
     speed: 50,
@@ -1119,12 +1273,10 @@ const addFeedCard = (story, isActive) => {
 
 const createActiveFeedCard = (story) => {
   const card = document.createElement("div");
-  card.className = "feed-card active processing";
+  card.className = "feed-card active";
   card.id = "active-feed-card";
   card.innerHTML = `
-    <div class="feed-card__header">
-      <span class="badge processing">Processing</span>
-    </div>
+    <div class="feed-card__header"></div>
     <h3>${getStorySummary(story)}</h3>
     <p>${formatMeta(story.source, story.publishedAt)}</p>
   `;
@@ -1132,7 +1284,45 @@ const createActiveFeedCard = (story) => {
 };
 
 
+const escapeHtml = (str) => {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+};
+
+let isSummarizing = false;
+
+const showSummarizingState = (policyText) => {
+  isSummarizing = true;
+  if (fetchNextBtn) {
+    fetchNextBtn.disabled = true;
+    fetchNextBtn.classList.add("is-loading");
+    fetchNextBtn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span> Summarizing...';
+  }
+
+  let card = document.getElementById("active-feed-card");
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "feed-card active processing";
+    card.id = "active-feed-card";
+    const container = getFeedContainer();
+    container?.prepend(card);
+  }
+  card.innerHTML = `
+    <div class="feed-card__header">
+      <span class="badge badge-summarizing"><span class="badge-spinner" aria-hidden="true"></span> Processing...</span>
+    </div>
+    <h3 class="summarizing-pulse">Summarizing policy...</h3>
+    <p>${escapeHtml((policyText || "").trim() || "Analyzing policy intent...")}</p>
+  `;
+  card.classList.add("active", "processing");
+  card.id = "active-feed-card";
+  activeFeedCard = card;
+  updateFeedEmptyState();
+};
+
 const setActiveFeed = (story) => {
+  isSummarizing = false;
   let card = document.getElementById("active-feed-card");
   if (!card) {
     const activeCard = createActiveFeedCard(story);
@@ -1144,19 +1334,20 @@ const setActiveFeed = (story) => {
   const meta = card.querySelector("p");
   if (header) {
     header.textContent = getStorySummary(story);
+    header.classList.remove("summarizing-pulse");
   }
   if (meta) {
     meta.textContent = formatMeta(story.source, story.publishedAt);
   }
 
-  const badge = card.querySelector(".badge");
-  if (badge) {
-    badge.textContent = "Processing";
-    badge.classList.remove("muted");
-    badge.classList.add("processing");
+  // Remove processing block once summary has been shown
+  const headerContainer = card.querySelector(".feed-card__header");
+  if (headerContainer) {
+    headerContainer.innerHTML = "";
   }
 
-  card.classList.add("active", "processing");
+  card.classList.remove("processing");
+  card.classList.add("active");
   card.id = "active-feed-card";
   activeFeedCard = card;
   updateFeedEmptyState();
@@ -1164,8 +1355,16 @@ const setActiveFeed = (story) => {
   card.style.cursor = "default";
 };
 
+let currentActiveStateName = null;
+
 const setActiveState = (stateName) => {
   const normalized = normalizeStateName(stateName);
+  if (!normalized) return;
+  if (currentActiveStateName === normalized) {
+    return; // Already active; avoid resetting styles and restarting animation on every token
+  }
+  currentActiveStateName = normalized;
+
   stateLayer.eachLayer((layer) => {
     const element = layer.getElement();
     if (element?.classList.contains("active")) {
@@ -1219,19 +1418,19 @@ const createAgentCard = (agent) => {
   card.dataset.agentName = agent?.name || "Council";
   if (agent?.name === "System") {
     card.classList.add("system");
-  }
-  if (agent?.state) {
+  } else if (agent?.state) {
+    card.classList.add("state-agent");
+    card.dataset.state = agent.state;
     card.classList.add(`team-${getStateTeam(agent.state)}`);
+  } else {
+    card.classList.add("council");
   }
   const avatarClass = agent?.muted ? "agent-avatar ghost" : "agent-avatar";
   const role = agent?.state ? `<span>${agent.state}</span>` : "";
-  const avatarData = agent?.state ? getStateAvatar(agent.state) : null;
-  const avatarLabel = avatarData?.initials || "";
-  const avatarStyle = avatarData?.background ? `style="background:${avatarData.background};"` : "";
   const messageText = agent?.message ?? "Awaiting signal.";
   const hasMessage = Boolean(String(messageText).trim());
   card.innerHTML = `
-    <div class="${avatarClass}" ${avatarStyle}>${avatarLabel}</div>
+    <div class="${avatarClass}"></div>
     <div>
       <div class="agent-name">${agent.name || "Council"} ${role}</div>
       <div class="agent-speech-list">
@@ -1244,7 +1443,7 @@ const createAgentCard = (agent) => {
 
 const createBootingCard = () => {
   const card = document.createElement("div");
-  card.className = "agent-card muted";
+  card.className = "agent-card muted council";
   card.id = "booting-card";
   card.innerHTML = `
     <div class="agent-avatar"></div>
@@ -1308,6 +1507,7 @@ const removeStandingBy = (card) => {
 const resetCouncil = (agents = []) => {
   deliberationList.innerHTML = "";
   councilsBooted = true;
+  currentActiveStateName = null;
   agentCards.clear();
   agentStreamEntries.clear();
   systemNotesContainer = null;
@@ -1348,6 +1548,7 @@ const resetCouncil = (agents = []) => {
 const resetCouncilDelayed = (agents = [], delayMs = 2000) => {
   deliberationList.innerHTML = "";
   councilsBooted = false;
+  currentActiveStateName = null;
   agentCards.clear();
   agentStreamEntries.clear();
   pendingCouncilCardTimers.forEach((timer) => clearTimeout(timer));
@@ -1402,6 +1603,80 @@ const resetCouncilDelayed = (agents = [], delayMs = 2000) => {
   });
 };
 
+const createThinkingBanner = (isCompleted = false) => {
+  const banner = document.createElement("div");
+  banner.className = isCompleted ? "thinking-banner completed" : "thinking-banner";
+  if (isCompleted) {
+    banner.innerHTML = `<span class="thinking-done-badge">✓</span><span class="thinking-done-text">Council Member’s Assessment Complete</span>`;
+  } else {
+    banner.innerHTML = `<span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+  }
+  return banner;
+};
+
+const updateThinkingBanner = (banner, isCompleted = false) => {
+  if (!banner) return;
+  if (isCompleted) {
+    banner.className = "thinking-banner completed";
+    banner.innerHTML = `<span class="thinking-done-badge">✓</span><span class="thinking-done-text">Council Member’s Assessment Complete</span>`;
+  } else {
+    banner.className = "thinking-banner";
+    banner.innerHTML = `<span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+  }
+};
+
+const createThoughtBlock = (initialText = "", isStreaming = false, initialCollapsed = false) => {
+  const block = document.createElement("div");
+  block.className = `agent-thought-block${initialCollapsed ? " collapsed" : ""}`;
+  block.innerHTML = `
+    <div class="agent-thought-header" role="button" tabindex="0" title="Click to collapse / expand">
+      <span class="thought-badge">${isStreaming ? "Reasoning" : "Thought Process"}</span>
+      ${isStreaming ? '<span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>' : ""}
+      <span class="thought-toggle-hint">${initialCollapsed ? "Click to expand" : "Click to collapse"}</span>
+      <svg class="thought-chevron" viewBox="0 0 20 20" fill="currentColor" width="13" height="13" aria-hidden="true">
+        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+      </svg>
+    </div>
+    <div class="agent-thought-body"></div>
+  `;
+  const bodyEl = block.querySelector(".agent-thought-body");
+  if (bodyEl && initialText) {
+    bodyEl.textContent = initialText;
+  }
+  const header = block.querySelector(".agent-thought-header");
+  const toggleCollapse = () => {
+    block.classList.toggle("collapsed");
+    const hint = block.querySelector(".thought-toggle-hint");
+    if (hint) {
+      hint.textContent = block.classList.contains("collapsed") ? "Click to expand" : "Click to collapse";
+    }
+  };
+  header.addEventListener("click", toggleCollapse);
+  header.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleCollapse();
+    }
+  });
+  return block;
+};
+
+const createDecisionBlock = (initialText = "") => {
+  const block = document.createElement("div");
+  block.className = "agent-decision-block";
+  block.innerHTML = `
+    <div class="agent-decision-header">
+      <span class="decision-badge">Decision</span>
+    </div>
+    <div class="agent-decision-body agent-speech-text"></div>
+  `;
+  const bodyEl = block.querySelector(".agent-decision-body");
+  if (bodyEl && initialText) {
+    bodyEl.textContent = initialText;
+  }
+  return block;
+};
+
 const upsertAgentStreamMessage = (payload) => {
   const name = payload.agent || "Council";
   const roundId = normalizeRoundId(payload.round);
@@ -1420,7 +1695,6 @@ const upsertAgentStreamMessage = (payload) => {
   const nameEl = card.querySelector(".agent-name");
   const avatarEl = card.querySelector(".agent-avatar");
   const label = payload.label || "";
-  const roundLabel = label ? `${label}: ` : "";
   const streamKey = `${name}:${payload.round ?? ""}:${label}`;
   const eventType = payload._eventType || "delta";
 
@@ -1443,72 +1717,113 @@ const upsertAgentStreamMessage = (payload) => {
 
     if (eventType === "start") {
       entry.classList.add("loading");
-      entry.innerHTML = `<div class="thinking-banner"><span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span></div>`;
+      entry.innerHTML = "";
+      const banner = createThinkingBanner(false);
+      entry.appendChild(banner);
     } else if (eventType === "reasoning_delta") {
-      // Keep the thinking animation at top, stream text directly below it
+      entry.classList.remove("loading");
       let banner = entry.querySelector(".thinking-banner");
       if (!banner) {
-        banner = document.createElement("div");
-        banner.className = "thinking-banner";
-        banner.innerHTML = `<span class="thinking-text">Council member is thinking</span><span class="thinking-dots"><span class="thinking-dot">.</span><span class="thinking-dot">.</span><span class="thinking-dot">.</span></span>`;
+        banner = createThinkingBanner(false);
         entry.prepend(banner);
       }
-      let reasonEl = entry.querySelector(".reasoning-stream-text");
-      if (!reasonEl) {
-        reasonEl = document.createElement("div");
-        reasonEl.className = "reasoning-stream-text";
-        entry.appendChild(reasonEl);
+      let thoughtBlock = entry.querySelector(".agent-thought-block");
+      if (!thoughtBlock) {
+        thoughtBlock = createThoughtBlock("", true);
+        if (banner.nextSibling) {
+          entry.insertBefore(thoughtBlock, banner.nextSibling);
+        } else {
+          entry.appendChild(thoughtBlock);
+        }
       }
-      if (payload.delta) {
-        reasonEl.textContent += payload.delta;
-        reasonEl.scrollTop = reasonEl.scrollHeight;
+      const bodyEl = thoughtBlock.querySelector(".agent-thought-body");
+      if (bodyEl && payload.delta) {
+        bodyEl.textContent += payload.delta;
+        bodyEl.scrollTop = bodyEl.scrollHeight;
       }
     } else if (eventType === "delta") {
-      // When speech begins, remove the thinking animation line immediately
       entry.classList.remove("loading");
-      const banner = entry.querySelector(".thinking-banner");
+      let banner = entry.querySelector(".thinking-banner");
       if (banner) {
-        banner.remove();
-      }
-      const legacyThinking = entry.querySelector(".thinking-text");
-      if (legacyThinking && legacyThinking.parentElement && legacyThinking.parentElement !== entry) {
-        legacyThinking.parentElement.remove();
-      }
-
-      // If reasoning text was streamed, mark it completed
-      const reasonEl = entry.querySelector(".reasoning-stream-text");
-      if (reasonEl) {
-        reasonEl.classList.add("reasoning-completed");
+        updateThinkingBanner(banner, true);
+      } else {
+        banner = createThinkingBanner(true);
+        entry.prepend(banner);
       }
 
-      let speechBody = entry.querySelector(".agent-speech-text");
-      if (!speechBody) {
-        speechBody = document.createElement("div");
-        speechBody.className = "agent-speech-text";
-        speechBody.textContent = roundLabel;
-        entry.appendChild(speechBody);
+      const thoughtBlock = entry.querySelector(".agent-thought-block");
+      if (thoughtBlock) {
+        const badge = thoughtBlock.querySelector(".thought-badge");
+        if (badge) badge.textContent = "Thought Process";
+        const dots = thoughtBlock.querySelector(".thinking-dots");
+        if (dots) dots.remove();
+        // Auto-collapse thought process once thinking is complete
+        thoughtBlock.classList.add("collapsed");
+        const hint = thoughtBlock.querySelector(".thought-toggle-hint");
+        if (hint) {
+          hint.textContent = "Click to expand";
+        }
       }
-      if (payload.delta) {
-        speechBody.textContent += payload.delta;
+
+      let decisionBlock = entry.querySelector(".agent-decision-block");
+      if (!decisionBlock) {
+        decisionBlock = createDecisionBlock("");
+        entry.appendChild(decisionBlock);
+      }
+      const decisionBody = decisionBlock.querySelector(".agent-decision-body");
+      if (decisionBody && payload.delta) {
+        decisionBody.textContent += payload.delta;
       }
     } else if (eventType === "end" || payload.message) {
       entry.classList.remove("loading");
       speechList.querySelectorAll(".agent-speech.loading").forEach((el) => {
         if (el !== entry) el.remove();
       });
-      const banner = entry.querySelector(".thinking-banner");
-      if (banner) banner.remove();
 
-      const reasonEl = entry.querySelector(".reasoning-stream-text");
-      if (reasonEl) {
-        reasonEl.classList.add("reasoning-completed");
+      let banner = entry.querySelector(".thinking-banner");
+      if (banner) {
+        updateThinkingBanner(banner, true);
       }
 
-      let speechBody = entry.querySelector(".agent-speech-text");
-      if (speechBody) {
-        speechBody.textContent = `${roundLabel}${payload.message || ""}`;
+      const reasoningText = (payload.reasoning || "").trim();
+      let thoughtBlock = entry.querySelector(".agent-thought-block");
+      if (!thoughtBlock && reasoningText) {
+        thoughtBlock = createThoughtBlock(reasoningText, false, true);
+        if (banner && banner.nextSibling) {
+          entry.insertBefore(thoughtBlock, banner.nextSibling);
+        } else if (banner) {
+          entry.appendChild(thoughtBlock);
+        } else {
+          entry.prepend(thoughtBlock);
+        }
+      } else if (thoughtBlock) {
+        const badge = thoughtBlock.querySelector(".thought-badge");
+        if (badge) badge.textContent = "Thought Process";
+        const dots = thoughtBlock.querySelector(".thinking-dots");
+        if (dots) dots.remove();
+        // Auto-collapse thought process block
+        thoughtBlock.classList.add("collapsed");
+        const hint = thoughtBlock.querySelector(".thought-toggle-hint");
+        if (hint) {
+          hint.textContent = "Click to expand";
+        }
+        if (reasoningText) {
+          const bodyEl = thoughtBlock.querySelector(".agent-thought-body");
+          if (bodyEl && !bodyEl.textContent.trim()) {
+            bodyEl.textContent = reasoningText;
+          }
+        }
+      }
+
+      let decisionBlock = entry.querySelector(".agent-decision-block");
+      if (!decisionBlock) {
+        decisionBlock = createDecisionBlock(payload.message || "");
+        entry.appendChild(decisionBlock);
       } else {
-        animateAgentEntryText(entry, `${roundLabel}${payload.message || ""}`);
+        const decisionBody = decisionBlock.querySelector(".agent-decision-body");
+        if (decisionBody) {
+          decisionBody.textContent = payload.message || "";
+        }
       }
     }
   }
@@ -1516,13 +1831,14 @@ const upsertAgentStreamMessage = (payload) => {
   if (nameEl && payload.state) {
     nameEl.innerHTML = `${name} <span>${payload.state}</span>`;
   }
-  if (avatarEl && payload.state) {
-    const avatarData = getStateAvatar(payload.state);
-    avatarEl.textContent = avatarData.initials;
-    avatarEl.style.background = avatarData.background;
-  }
   if (payload.state) {
+    card.classList.add("state-agent");
+    card.dataset.state = payload.state;
     card.classList.add(`team-${getStateTeam(payload.state)}`);
+    if (avatarEl) {
+      avatarEl.textContent = "";
+      avatarEl.style.background = "";
+    }
   }
   card.classList.remove("muted");
   card.classList.add("speaking");
@@ -1551,7 +1867,6 @@ const upsertAgentMessage = (payload) => {
   const avatarEl = card.querySelector(".agent-avatar");
   if (speechList) {
     const label = payload.label || "";
-    const roundLabel = label ? `${label}: ` : "";
     const streamKey = `${name}:${payload.round ?? ""}:${label}`;
     let entry = agentStreamEntries.get(streamKey);
     if (!entry) {
@@ -1572,42 +1887,70 @@ const upsertAgentMessage = (payload) => {
     speechList.querySelectorAll(".agent-speech.loading").forEach((el) => {
       if (el !== entry) el.remove();
     });
-    const banner = entry.querySelector(".thinking-banner");
-    if (banner) banner.remove();
 
-    let reasonEl = entry.querySelector(".reasoning-stream-text");
-    if (!reasonEl && payload.reasoning && payload.reasoning.trim()) {
-      reasonEl = document.createElement("div");
-      reasonEl.className = "reasoning-stream-text reasoning-completed";
-      reasonEl.textContent = payload.reasoning.trim();
-      entry.prepend(reasonEl);
-    } else if (reasonEl) {
-      reasonEl.classList.add("reasoning-completed");
+    const hasReasoning = Boolean(payload.reasoning && payload.reasoning.trim());
+
+    // 1. Thinking Banner at top
+    let banner = entry.querySelector(".thinking-banner");
+    if (!banner) {
+      banner = createThinkingBanner(true);
+      entry.prepend(banner);
+    } else {
+      updateThinkingBanner(banner, true);
     }
 
-    let speechBody = entry.querySelector(".agent-speech-text");
-    if (speechBody) {
-      speechBody.textContent = `${roundLabel}${payload.message || ""}`;
-    } else if (reasonEl) {
-      speechBody = document.createElement("div");
-      speechBody.className = "agent-speech-text";
-      speechBody.textContent = `${roundLabel}${payload.message || ""}`;
-      entry.appendChild(speechBody);
+    // 2. Block 1: Thought Process Block (if reasoning exists or already present)
+    let thoughtBlock = entry.querySelector(".agent-thought-block");
+    if (!thoughtBlock && hasReasoning) {
+      thoughtBlock = createThoughtBlock(payload.reasoning.trim(), false, true);
+      if (banner && banner.nextSibling) {
+        entry.insertBefore(thoughtBlock, banner.nextSibling);
+      } else {
+        entry.appendChild(thoughtBlock);
+      }
+    } else if (thoughtBlock) {
+      const badge = thoughtBlock.querySelector(".thought-badge");
+      if (badge) badge.textContent = "Thought Process";
+      const dots = thoughtBlock.querySelector(".thinking-dots");
+      if (dots) dots.remove();
+      // Auto-collapse thought process block
+      thoughtBlock.classList.add("collapsed");
+      const hint = thoughtBlock.querySelector(".thought-toggle-hint");
+      if (hint) {
+        hint.textContent = "Click to expand";
+      }
+      if (hasReasoning) {
+        const bodyEl = thoughtBlock.querySelector(".agent-thought-body");
+        if (bodyEl && !bodyEl.textContent.trim()) {
+          bodyEl.textContent = payload.reasoning.trim();
+        }
+      }
+    }
+
+    // 3. Block 2: Decision Block
+    let decisionBlock = entry.querySelector(".agent-decision-block");
+    if (!decisionBlock) {
+      decisionBlock = createDecisionBlock(payload.message || "");
+      entry.appendChild(decisionBlock);
     } else {
-      animateAgentEntryText(entry, `${roundLabel}${payload.message || ""}`);
+      const decisionBody = decisionBlock.querySelector(".agent-decision-body");
+      if (decisionBody) {
+        decisionBody.textContent = payload.message || "";
+      }
     }
   }
 
   if (nameEl && payload.state) {
     nameEl.innerHTML = `${name} <span>${payload.state}</span>`;
   }
-  if (avatarEl && payload.state) {
-    const avatarData = getStateAvatar(payload.state);
-    avatarEl.textContent = avatarData.initials;
-    avatarEl.style.background = avatarData.background;
-  }
   if (payload.state) {
+    card.classList.add("state-agent");
+    card.dataset.state = payload.state;
     card.classList.add(`team-${getStateTeam(payload.state)}`);
+    if (avatarEl) {
+      avatarEl.textContent = "";
+      avatarEl.style.background = "";
+    }
   }
   card.classList.remove("muted");
 
@@ -1893,7 +2236,7 @@ const clearSystemLoadingIndicators = () => {
 
 const connectLiveStream = () => {
   if (!window.EventSource) {
-    safeAddNote("Updates unsupported in this browser.");
+    console.warn("[Stream] Updates unsupported in this browser.");
     return;
   }
 
@@ -1908,6 +2251,15 @@ const connectLiveStream = () => {
   stream.addEventListener("topic", (event) => {
     const data = JSON.parse(event.data);
     setTopic(data.title || "Update");
+  });
+
+  stream.addEventListener("policy_summarizing", (event) => {
+    try {
+      const data = JSON.parse(event.data || "{}");
+      showSummarizingState(data.policy);
+    } catch (_) {
+      showSummarizingState();
+    }
   });
 
   stream.addEventListener("feed", (event) => {
@@ -2171,10 +2523,61 @@ const connectLiveStream = () => {
   });
 
   stream.addEventListener("error", () => {
-    safeAddNote("Stream disconnected. Retrying...");
+    console.warn("[Stream] disconnected. Retrying...");
     setStatusText(statusConnection, "reconnecting");
   });
 };
+
+let topWarningTimer = null;
+
+function showTopWarning(message) {
+  const banner = document.getElementById("top-warning-banner");
+  const textEl = document.getElementById("top-warning-text");
+  if (!banner || !textEl) return;
+
+  textEl.textContent = message || "Validation error";
+  banner.classList.remove("banner-hide");
+  banner.style.display = "flex";
+
+  clearTimeout(topWarningTimer);
+  topWarningTimer = setTimeout(() => {
+    dismissTopWarning();
+  }, 4000);
+}
+
+function dismissTopWarning() {
+  const banner = document.getElementById("top-warning-banner");
+  if (!banner || banner.style.display === "none") return;
+  clearTimeout(topWarningTimer);
+  banner.classList.add("banner-hide");
+  setTimeout(() => {
+    banner.style.display = "none";
+    banner.classList.remove("banner-hide");
+  }, 220);
+}
+
+function triggerInputError(element, message) {
+  if (!element) return;
+  const layoutEl = document.querySelector(".layout");
+  if (layoutEl?.classList.contains("feed-collapsed")) {
+    layoutEl.classList.remove("feed-collapsed");
+  }
+  element.classList.add("has-error");
+  element.classList.remove("error-shake");
+  void element.offsetWidth;
+  element.classList.add("error-shake");
+  element.focus();
+  const configBox = document.getElementById("provider-config-box");
+  if (element !== topicInput && configBox) {
+    configBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  showTopWarning(message);
+}
+
+function clearInputError(element) {
+  if (!element) return;
+  element.classList.remove("has-error", "error-shake");
+}
 
 if (fetchNextBtn) {
   console.log("[BOOT] Begin Simulation button found, binding click handler");
@@ -2185,44 +2588,45 @@ if (fetchNextBtn) {
     }
     const query = topicInput?.value?.trim() || "";
     if (!query) {
-      safeAddNote("Enter policy details to begin the simulation.");
+      triggerInputError(topicInput, "Policy details have not been entered.");
       return;
     }
 
-    const provider = document.getElementById("provider-select")?.value || "openrouter";
-    const apiKeyInput = document.getElementById("api-key-input");
-    const apiKey = apiKeyInput?.value?.trim() || "";
+    const providerSelect = document.getElementById("provider-select");
+    const provider = providerSelect?.value || "";
+    if (!provider || !PROVIDERS[provider]) {
+      triggerInputError(providerSelect, "Provider has not been selected.");
+      return;
+    }
+
+    const modelInput = document.getElementById("model-input");
+    const modelSelect = document.getElementById("model-select");
+    const isLmStudio = provider === "lmstudio";
+    const model = (isLmStudio ? modelInput?.value?.trim() : modelSelect?.value?.trim()) || "";
+    if (!model) {
+      const modelEl = isLmStudio ? modelInput : modelSelect;
+      triggerInputError(modelEl, "Model has not been selected.");
+      return;
+    }
 
     const providerConfig = PROVIDERS[provider];
     const requiresKey = providerConfig ? providerConfig.requiresKey !== false : true;
+    const apiKeyInput = document.getElementById("api-key-input");
+    const apiKey = apiKeyInput?.value?.trim() || "";
 
     if (requiresKey && !apiKey) {
-      const providerName = providerConfig?.name || provider.toUpperCase();
-      safeAddNote(`[API Key Required] Please enter your ${providerName} API key before beginning the round.`);
-      if (apiKeyInput) {
-        apiKeyInput.focus();
-        apiKeyInput.classList.remove("input-error-pulse");
-        void apiKeyInput.offsetWidth;
-        apiKeyInput.classList.add("input-error-pulse");
-        setTimeout(() => apiKeyInput.classList.remove("input-error-pulse"), 1200);
-      }
+      triggerInputError(apiKeyInput, "API key has not been entered.");
       return;
     }
 
     fetchLocked = true;
     setDebateLocked(true);
-    fetchNextBtn.disabled = true;
-    fetchNextBtn.classList.add("is-loading");
-    fetchNextBtn.textContent = "Starting Simulation";
+    showSummarizingState(query);
     stateLayer.eachLayer((layer) => {
       layer.getElement()?.classList.remove("active");
       layer.setStyle(baseStateStyle);
     });
     stateImpact.clear();
-
-    const modelInput = document.getElementById("model-input");
-    const modelSelect = document.getElementById("model-select");
-    const model = (provider === "lmstudio" ? modelInput?.value?.trim() : modelSelect?.value?.trim()) || providerConfig?.defaultModel || "";
 
     try {
       const response = await fetch("/api/next", {
@@ -2241,12 +2645,19 @@ if (fetchNextBtn) {
         throw new Error(resData?.error || "Failed to start simulation.");
       }
     } catch (error) {
+      isSummarizing = false;
       stopDebateRunningIndicator();
       setDebateLocked(false);
       fetchNextBtn.disabled = false;
       fetchNextBtn.classList.remove("is-loading");
       fetchNextBtn.textContent = "Begin Simulation";
-      safeAddNote(error.message || "Failed to start simulation.");
+      const card = document.getElementById("active-feed-card");
+      if (card && card.querySelector(".badge-summarizing")) {
+        card.remove();
+        activeFeedCard = null;
+        updateFeedEmptyState();
+      }
+      showTopWarning(error.message || "Failed to start simulation.");
     }
   });
 }
@@ -2383,14 +2794,26 @@ const initProviderConfig = () => {
   };
 
   const updateModelOptions = (providerKey, models, preferredModel) => {
-    const targetModel = preferredModel || getActiveModel() || PROVIDERS[providerKey]?.defaultModel || (models && models[0]) || "";
+    const targetModel = preferredModel || "";
 
     modelSelect.innerHTML = "";
+    const placeholderOpt = document.createElement("option");
+    placeholderOpt.value = "";
+    placeholderOpt.textContent = "Select Model";
+    placeholderOpt.disabled = true;
+    if (!targetModel) {
+      placeholderOpt.selected = true;
+    }
+    modelSelect.appendChild(placeholderOpt);
+
     const list = (models && models.length > 0) ? models : (PROVIDERS[providerKey]?.exampleModels || []);
     list.forEach((m) => {
       const opt = document.createElement("option");
       opt.value = m;
       opt.textContent = m;
+      if (targetModel && m === targetModel) {
+        opt.selected = true;
+      }
       modelSelect.appendChild(opt);
     });
 
@@ -2406,8 +2829,12 @@ const initProviderConfig = () => {
       const opt = document.createElement("option");
       opt.value = targetModel;
       opt.textContent = targetModel;
-      modelSelect.prepend(opt);
-      modelSelect.selectedIndex = 0;
+      opt.selected = true;
+      modelSelect.appendChild(opt);
+      modelSelect.value = targetModel;
+    }
+    if (!targetModel) {
+      modelSelect.value = "";
     }
   };
 
@@ -2441,18 +2868,19 @@ const initProviderConfig = () => {
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          if (res.status !== 409) {
-            safeAddNote(`[Config] ${body?.error || "Could not save provider settings."}`);
+          if (res.status !== 409 && res.status !== 400) {
+            console.warn("[Config]", body?.error);
           }
         }
       } catch (err) {
-        safeAddNote(`[Config] Could not reach server: ${err.message}`);
+        console.warn("[Config] Could not reach server:", err.message);
       }
     }, 350);
   };
 
   const loadModelsDynamically = async (providerKey, isManual = false) => {
-    const config = PROVIDERS[providerKey] || PROVIDERS.openrouter;
+    const config = PROVIDERS[providerKey];
+    if (!config) return;
     const apiKey = apiKeyInput?.value?.trim() || "";
     const currentModel = getActiveModel();
 
@@ -2467,38 +2895,65 @@ const initProviderConfig = () => {
 
       if (data.ok && Array.isArray(data.models) && data.models.length > 0) {
         modelCache[providerKey] = data.models;
-        updateModelOptions(providerKey, data.models, currentModel || config.defaultModel);
-        saveConfigLocally();
-        syncConfigToServer();
+        updateModelOptions(providerKey, data.models, currentModel || "");
+        if (currentModel) {
+          saveConfigLocally();
+          syncConfigToServer();
+        }
         return;
       }
 
       if (data.error && isManual) {
-        safeAddNote(`[Models] ${data.error}`);
+        console.warn(`[Models] ${data.error}`);
       }
     } catch (err) {
       if (isManual) {
-        safeAddNote(`[Models] Failed to fetch: ${err.message}`);
+        console.warn(`[Models] Failed to fetch: ${err.message}`);
       }
     }
 
     const fallbackList = modelCache[providerKey] || config.exampleModels || [];
-    updateModelOptions(providerKey, fallbackList, currentModel || config.defaultModel);
+    updateModelOptions(providerKey, fallbackList, currentModel || "");
   };
 
   const applyProvider = (providerKey, isInitial = false, explicitModel = null) => {
-    const config = PROVIDERS[providerKey] || PROVIDERS.openrouter;
+    if (!providerKey || !PROVIDERS[providerKey]) {
+      if (providerBadge) providerBadge.textContent = "None";
+      if (apiKeyHint) apiKeyHint.textContent = "";
+      if (apiKeyInput) {
+        apiKeyInput.placeholder = "Enter API Key";
+        clearInputError(apiKeyInput);
+      }
+      if (modelSelect) {
+        modelSelect.innerHTML = '<option value="" disabled selected>Select Model</option>';
+        clearInputError(modelSelect);
+      }
+      if (modelInput) {
+        modelInput.value = "";
+        clearInputError(modelInput);
+      }
+      updateModelMode("");
+      return;
+    }
+
+    const config = PROVIDERS[providerKey];
     if (providerBadge) providerBadge.textContent = config.badge;
     if (apiKeyHint) apiKeyHint.textContent = config.keyHint;
     if (apiKeyInput) apiKeyInput.placeholder = config.keyPlaceholder;
 
+    clearInputError(apiKeyInput);
+    clearInputError(providerSelect);
+    clearInputError(modelSelect);
+    clearInputError(modelInput);
+    dismissTopWarning();
+
     updateModelMode(providerKey);
 
-    const chosenModel = explicitModel || (isInitial ? getActiveModel() : (config.defaultModel || (config.exampleModels && config.exampleModels[0]) || ""));
+    const chosenModel = explicitModel || "";
     const initialList = modelCache[providerKey] || config.exampleModels || [];
     updateModelOptions(providerKey, initialList, chosenModel);
 
-    if (!isInitial) {
+    if (!isInitial && chosenModel) {
       setActiveModel(chosenModel);
       saveConfigLocally();
       syncConfigToServer();
@@ -2520,27 +2975,45 @@ const initProviderConfig = () => {
   });
 
   providerSelect.addEventListener("change", () => {
+    clearInputError(providerSelect);
+    dismissTopWarning();
     applyProvider(providerSelect.value, false);
+    if (providerSelect.value) {
+      saveConfigLocally();
+      syncConfigToServer();
+    }
   });
 
   modelSelect?.addEventListener("change", () => {
+    if (modelSelect.value) {
+      clearInputError(modelSelect);
+      dismissTopWarning();
+    }
     saveConfigLocally();
     syncConfigToServer();
   });
 
   modelInput?.addEventListener("input", () => {
+    if (modelInput.value.trim()) {
+      clearInputError(modelInput);
+      dismissTopWarning();
+    }
     saveConfigLocally();
     syncConfigToServer();
   });
 
   let keyDebounceTimer = null;
   apiKeyInput?.addEventListener("input", () => {
+    if (apiKeyInput.value.trim()) {
+      clearInputError(apiKeyInput);
+      dismissTopWarning();
+    }
     saveConfigLocally();
     syncConfigToServer();
     clearTimeout(keyDebounceTimer);
     keyDebounceTimer = setTimeout(() => {
       const pCfg = PROVIDERS[providerSelect.value];
-      if (!pCfg?.customInput) {
+      if (pCfg && !pCfg.customInput) {
         loadModelsDynamically(providerSelect.value, false);
       }
     }, 600);
@@ -2572,21 +3045,9 @@ const initProviderConfig = () => {
     });
   }
 
-  let restored = false;
-  try {
-    const saved = localStorage.getItem("policy_llm_config");
-    if (saved) {
-      const data = JSON.parse(saved);
-      if (data.provider && PROVIDERS[data.provider]) {
-        providerSelect.value = data.provider;
-      }
-      applyProvider(providerSelect.value, true, data.model);
-      if (data.model) setActiveModel(data.model);
-      restored = true;
-      syncConfigToServer();
-    }
-  } catch (e) {
-  }
+  // Do not default select any provider or model
+  providerSelect.value = "";
+  applyProvider("", true);
 
   fetch("/api/config", { headers: authHeaders() })
     .then((r) => {
@@ -2602,24 +3063,166 @@ const initProviderConfig = () => {
         reasoningToggle.checked = cfg.showReasoning;
         updateReasoningBadge(cfg.showReasoning);
       }
-      if (!restored) {
-        if (cfg.provider && PROVIDERS[cfg.provider]) {
-          providerSelect.value = cfg.provider;
-        }
-        applyProvider(providerSelect.value, true, cfg.model);
-        if (cfg.model) setActiveModel(cfg.model);
+    })
+    .catch(() => {});
+};
+
+const initUserProfileMenu = () => {
+  const profileMenu = document.getElementById("user-profile-menu");
+  const avatarBtn = document.getElementById("user-avatar-btn");
+  const dropdown = document.getElementById("user-dropdown");
+  const nameEl = document.getElementById("user-dropdown-name");
+  const emailEl = document.getElementById("user-dropdown-email");
+  const themeBtn = document.getElementById("user-menu-theme") || document.getElementById("user-menu-settings");
+  const signoutBtn = document.getElementById("user-menu-signout");
+  const avatarInitial = document.getElementById("user-dropdown-avatar");
+
+  if (!profileMenu || !avatarBtn || !dropdown) {
+    return;
+  }
+
+  const applyUserData = (user) => {
+    if (!user) return;
+    const email = user.email || (user.username ? `${user.username}@council.local` : "");
+    const fullName = user.fullName || user.username || "Council Member";
+    if (nameEl) nameEl.textContent = fullName;
+    if (emailEl) {
+      emailEl.textContent = email || "user@council.local";
+      emailEl.title = email || "";
+    }
+    const firstLetter = (fullName || email || "U").trim().charAt(0).toUpperCase();
+    if (avatarInitial) {
+      avatarInitial.textContent = firstLetter;
+    }
+    const topbarInitial = document.getElementById("user-avatar-initial");
+    const topbarIcon = document.querySelector("#user-avatar-circle .user-avatar-icon");
+    if (topbarInitial && firstLetter) {
+      topbarInitial.textContent = firstLetter;
+      topbarInitial.style.display = "block";
+      if (topbarIcon) topbarIcon.style.display = "none";
+    }
+  };
+
+  try {
+    const cached = localStorage.getItem("llmCouncilUser");
+    if (cached) {
+      const u = JSON.parse(cached);
+      applyUserData(u);
+    }
+  } catch (e) {}
+
+  fetch("/api/auth/me", { headers: authHeaders() })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((res) => {
+      if (res?.user) {
+        localStorage.setItem("llmCouncilUser", JSON.stringify(res.user));
+        applyUserData(res.user);
       }
     })
-    .catch(() => {
-      if (!restored) {
-        applyProvider(providerSelect.value || "openrouter", true);
+    .catch(() => {});
+
+  const toggleDropdown = (open) => {
+    const isOpen = typeof open === "boolean" ? open : !dropdown.classList.contains("open");
+    dropdown.classList.toggle("open", isOpen);
+    profileMenu.classList.toggle("is-active", isOpen);
+    avatarBtn.setAttribute("aria-expanded", String(isOpen));
+  };
+
+  avatarBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleDropdown();
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!profileMenu.contains(e.target)) {
+      toggleDropdown(false);
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && dropdown.classList.contains("open")) {
+      toggleDropdown(false);
+      avatarBtn.focus();
+    }
+  });
+
+  themeBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleTheme();
+  });
+
+  signoutBtn?.addEventListener("click", async () => {
+    toggleDropdown(false);
+    try {
+      localStorage.removeItem("llmCouncilIdToken");
+      localStorage.removeItem("llmCouncilUser");
+      sessionStorage.clear();
+      if (window.firebase && typeof window.firebase.auth === "function") {
+        try {
+          const auth = window.firebase.auth();
+          if (auth && typeof auth.signOut === "function") {
+            await auth.signOut();
+          }
+        } catch (_) {}
       }
-    });
+    } finally {
+      window.location.href = "/logout";
+    }
+  });
+};
+
+const applyTheme = (theme, persist = true) => {
+  const effectiveTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", effectiveTheme);
+  if (persist) {
+    try {
+      localStorage.setItem("policy_sim_theme", effectiveTheme);
+    } catch (e) {}
+  }
+
+  // Update theme badge in user menu
+  const themeBadge = document.getElementById("theme-status-badge");
+  if (themeBadge) {
+    themeBadge.textContent = effectiveTheme === "light" ? "Light" : "Dark";
+  }
+
+  // Update icons in user menu
+  const darkIcon = document.querySelector(".theme-icon-dark");
+  const lightIcon = document.querySelector(".theme-icon-light");
+  if (darkIcon && lightIcon) {
+    if (effectiveTheme === "light") {
+      darkIcon.style.display = "none";
+      lightIcon.style.display = "block";
+    } else {
+      darkIcon.style.display = "block";
+      lightIcon.style.display = "none";
+    }
+  }
+
+  // Update Leaflet map canvas theme
+  updateMapTheme(effectiveTheme);
+};
+
+const toggleTheme = () => {
+  const current = getCurrentTheme();
+  const next = current === "light" ? "dark" : "light";
+  applyTheme(next, true);
+};
+
+const initTheme = () => {
+  let savedTheme = "dark";
+  try {
+    savedTheme = localStorage.getItem("policy_sim_theme") || "dark";
+  } catch (e) {}
+  applyTheme(savedTheme, false);
 };
 
 ensureSystemNotesContainer();
 ensureAgentsContainer();
+initTheme();
 initProviderConfig();
+initUserProfileMenu();
 
 connectLiveStream();
+
 
