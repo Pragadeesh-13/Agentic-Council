@@ -13,25 +13,25 @@
  *    or 'unsafe-inline', and would hardcode one Firebase project into the HTML
  *    instead of leaving it as a server-side setting.
  *  - Lazily initialize the Firebase app + auth instance.
- *  - Expose window.llmCouncilGoogleSignIn(), used by the Google buttons on
+ *  - Expose window.agenticCouncilGoogleSignIn(), used by the Google buttons on
  *    login.html and signup.html. On success the resolved user is persisted to
- *    localStorage under "llmCouncilUser", matching the shape written by the
+ *    localStorage under "agenticCouncilUser", matching the shape written by the
  *    password login flow in /js/login.js.
  *
  * If the Firebase SDK is unavailable (offline / blocked CDN), the script degrades
- * quietly: window.llmCouncilGoogleSignIn is left undefined and the calling pages
+ * quietly: window.agenticCouncilGoogleSignIn is left undefined and the calling pages
  * report "Google sign-in is not available right now."
  */
 
 (function initFirebaseAuthBridge(global) {
   "use strict";
 
-  const USER_STORAGE_KEY = "llmCouncilUser";
-  const ID_TOKEN_STORAGE_KEY = "llmCouncilIdToken";
+  const USER_STORAGE_KEY = "agenticCouncilUser";
+  const ID_TOKEN_STORAGE_KEY = "agenticCouncilIdToken";
   const CONFIG_ENDPOINT = "/api/auth/firebase-config";
 
   /** sessionStorage key marking that a sign-in redirect is in flight. */
-  const REDIRECT_MARKER_KEY = "llmCouncilGoogleRedirect";
+  const REDIRECT_MARKER_KEY = "agenticCouncilGoogleRedirect";
 
   let firebaseConfigPromise = null;
   let authPromise = null;
@@ -311,11 +311,13 @@
     }
     if (!idToken) throw new Error("Google sign-in did not return an ID token.");
 
+    const photoURL = credential?.user?.photoURL || "";
     const postBody = {
       idToken,
       email: credential?.user?.email || "",
       displayName: credential?.user?.displayName || "",
       uid: credential?.user?.uid || "",
+      photoURL,
     };
 
     const response = await fetch("/api/auth/google", {
@@ -327,6 +329,10 @@
 
     if (!response.ok || !payload?.ok || !payload?.user) {
       throw new Error(String(payload?.error || "Google sign-in failed."));
+    }
+
+    if (photoURL && !payload.user.photoURL) {
+      payload.user.photoURL = photoURL;
     }
 
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload.user));
@@ -348,10 +354,10 @@
     global.location.replace(to);
   }
 
-  global.llmCouncilGoogleSignIn = googleSignIn;
-  global.llmCouncilCompleteGoogleSignIn = completeRedirectSignIn;
-  global.llmCouncilContinueAfterSignIn = continueToApp;
-  global.llmCouncilGetFirebaseAuth = getFirebaseAuthInstance;
+  global.agenticCouncilGoogleSignIn = googleSignIn;
+  global.agenticCouncilCompleteGoogleSignIn = completeRedirectSignIn;
+  global.agenticCouncilContinueAfterSignIn = continueToApp;
+  global.agenticCouncilGetFirebaseAuth = getFirebaseAuthInstance;
 
   /**
    * Called by login.html / signup.html on load.
@@ -364,7 +370,7 @@
    *
    * @returns {Promise<{ user: object|null, error: Error|null }>}
    */
-  global.llmCouncilResumeGoogleSignIn = async function resumeGoogleSignIn() {
+  global.agenticCouncilResumeGoogleSignIn = async function resumeGoogleSignIn() {
     try {
       const user = await completeRedirectSignIn();
 

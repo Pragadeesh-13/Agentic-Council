@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
     key_vault.dispose()
 
 
-app = FastAPI(title="LLM Council", version="3.0.0", lifespan=lifespan)
+app = FastAPI(title="Agentic Council", version="3.0.0", lifespan=lifespan)
 
 # CORS configuration
 origins = settings.allowed_origins if settings.allowed_origins else ["*"]
@@ -425,11 +425,14 @@ async def google_auth(request: Request):
     uid = str(body.get("uid") or f"google_{int(time.time())}").strip()
     username = email.split("@")[0] if "@" in email else uid
 
+    photo_url = str(body.get("photoURL") or body.get("photoUrl") or "").strip()
+
     user = {
         "id": uid,
         "username": username,
         "fullName": full_name,
         "email": email,
+        "photoURL": photo_url,
     }
     guard.register_session(id_token, user)
     response = JSONResponse(status_code=200, content={"ok": True, "user": user, "idToken": id_token})

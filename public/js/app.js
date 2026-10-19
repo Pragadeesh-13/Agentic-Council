@@ -9,7 +9,7 @@
  * @returns {Record<string, string>}
  */
 const authHeaders = () => {
-  const token = localStorage.getItem("llmCouncilIdToken");
+  const token = localStorage.getItem("agenticCouncilIdToken");
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -67,10 +67,15 @@ const STATES_GEOJSON_URL = "/map/india-states.geojson";
 
 const stateNameToLayers = new Map();
 const normalizeStateName = (value) => {
-  const normalized = (value || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const normalized = (value || "").toLowerCase().replace(/\s+council$/i, "").replace(/\s+/g, " ").trim();
   const aliases = {
     "nct of delhi": "delhi",
     "national capital territory of delhi": "delhi",
+    "orissa": "odisha",
+    "uttaranchal": "uttarakhand",
+    "jammu and kashmir": "jammu & kashmir",
+    "andaman and nicobar": "andaman & nicobar",
+    "andaman and nicobar islands": "andaman & nicobar",
   };
   return aliases[normalized] || normalized;
 };
@@ -103,38 +108,38 @@ const getBaseStateStyle = (theme = getCurrentTheme()) => {
 const getPositiveStateStyle = (theme = getCurrentTheme()) => {
   if (theme === "light") {
     return {
-      className: "state-path",
-      fillColor: "rgba(34, 197, 94, 0.4)",
-      fillOpacity: 0.7,
-      color: "rgba(22, 163, 74, 0.95)",
-      weight: 1.4,
+      className: "state-path positive",
+      fillColor: "#22c55e",
+      fillOpacity: 0.45,
+      color: "#16a34a",
+      weight: 2,
     };
   }
   return {
-    className: "state-path",
-    fillColor: "rgba(56, 204, 118, 0.55)",
-    fillOpacity: 0.6,
-    color: "rgba(56, 204, 118, 0.9)",
-    weight: 1.4,
+    className: "state-path positive",
+    fillColor: "#22c55e",
+    fillOpacity: 0.55,
+    color: "#4ade80",
+    weight: 2,
   };
 };
 
 const getNegativeStateStyle = (theme = getCurrentTheme()) => {
   if (theme === "light") {
     return {
-      className: "state-path",
-      fillColor: "rgba(239, 68, 68, 0.4)",
-      fillOpacity: 0.7,
-      color: "rgba(220, 38, 38, 0.95)",
-      weight: 1.4,
+      className: "state-path negative",
+      fillColor: "#ef4444",
+      fillOpacity: 0.45,
+      color: "#dc2626",
+      weight: 2,
     };
   }
   return {
-    className: "state-path",
-    fillColor: "rgba(230, 74, 74, 0.55)",
-    fillOpacity: 0.6,
-    color: "rgba(230, 74, 74, 0.9)",
-    weight: 1.4,
+    className: "state-path negative",
+    fillColor: "#ef4444",
+    fillOpacity: 0.55,
+    color: "#f87171",
+    weight: 2,
   };
 };
 
@@ -157,30 +162,25 @@ const getActiveStateStyle = (theme = getCurrentTheme()) => {
   };
 };
 
-// Proxies so any direct reference to baseStateStyle/positiveStateStyle gets current theme values automatically
-const baseStateStyle = new Proxy({}, {
-  get(target, prop) {
-    return getBaseStateStyle()[prop];
-  }
-});
+// Proxies with full reflection traps so Leaflet setStyle enumerates properties correctly
+const createThemeStyleProxy = (getter) =>
+  new Proxy({}, {
+    get(target, prop) {
+      return getter()[prop];
+    },
+    ownKeys() {
+      return Object.keys(getter());
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      const val = getter()[prop];
+      return val !== undefined ? { value: val, enumerable: true, writable: true, configurable: true } : undefined;
+    }
+  });
 
-const positiveStateStyle = new Proxy({}, {
-  get(target, prop) {
-    return getPositiveStateStyle()[prop];
-  }
-});
-
-const negativeStateStyle = new Proxy({}, {
-  get(target, prop) {
-    return getNegativeStateStyle()[prop];
-  }
-});
-
-const activeStateStyle = new Proxy({}, {
-  get(target, prop) {
-    return getActiveStateStyle()[prop];
-  }
-});
+const baseStateStyle = createThemeStyleProxy(getBaseStateStyle);
+const positiveStateStyle = createThemeStyleProxy(getPositiveStateStyle);
+const negativeStateStyle = createThemeStyleProxy(getNegativeStateStyle);
+const activeStateStyle = createThemeStyleProxy(getActiveStateStyle);
 
 const updateMapTheme = (theme = getCurrentTheme()) => {
   if (!stateLayer || !stateLayer.eachLayer) return;
@@ -193,11 +193,17 @@ const updateMapTheme = (theme = getCurrentTheme()) => {
     const name = layer.feature?.properties?.ST_NM || layer.feature?.properties?.NAME_1 || layer.feature?.properties?.state || layer.feature?.properties?.name || "Unknown";
     const normalized = normalizeStateName(name);
     const impact = stateImpact.get(normalized);
+    const element = layer.getElement();
     if (impact === "positive") {
+      element?.classList.add("positive");
+      element?.classList.remove("negative");
       layer.setStyle(getPositiveStateStyle(theme));
     } else if (impact === "negative") {
+      element?.classList.add("negative");
+      element?.classList.remove("positive");
       layer.setStyle(getNegativeStateStyle(theme));
     } else {
+      element?.classList.remove("positive", "negative");
       layer.setStyle(getBaseStateStyle(theme));
     }
   });
@@ -243,12 +249,23 @@ fetch(STATES_GEOJSON_URL)
     stateImpact.forEach((impact, stateName) => {
       const layers = getStateLayers(stateName);
       layers.forEach((layer) => {
+        const el = layer.getElement();
+        if (el) {
+          el.classList.remove("active");
+          if (impact === "positive") {
+            el.classList.add("positive");
+            el.classList.remove("negative");
+          } else if (impact === "negative") {
+            el.classList.add("negative");
+            el.classList.remove("positive");
+          }
+        }
         if (impact === "positive") {
-          layer.setStyle(positiveStateStyle);
+          layer.setStyle(getPositiveStateStyle());
         } else if (impact === "negative") {
-          layer.setStyle(negativeStateStyle);
+          layer.setStyle(getNegativeStateStyle());
         } else {
-          layer.setStyle(baseStateStyle);
+          layer.setStyle(getBaseStateStyle());
         }
       });
     });
@@ -1095,7 +1112,7 @@ const ensureSystemNotesContainer = () => {
 
   const header = document.createElement("div");
   header.className = "section-header";
-  header.textContent = "System Messages";
+  header.textContent = "Session Moderator";
 
   const headerRow = document.createElement("div");
   headerRow.className = "system-header-row";
@@ -1414,10 +1431,15 @@ const clearActiveState = () => {
     const normalized = normalizeStateName(name);
     const impact = stateImpact.get(normalized);
     if (impact === "positive") {
+      element?.classList.add("positive");
+      element?.classList.remove("negative");
       layer.setStyle(getPositiveStateStyle());
     } else if (impact === "negative") {
+      element?.classList.add("negative");
+      element?.classList.remove("positive");
       layer.setStyle(getNegativeStateStyle());
     } else {
+      element?.classList.remove("positive", "negative");
       layer.setStyle(getBaseStateStyle());
     }
   });
@@ -1451,12 +1473,25 @@ const setStateImpact = (stateName, impact) => {
   const targets = getStateLayers(normalized);
   console.log(`[MAP] Found ${targets.length} layer(s) for "${normalized}"`);
   targets.forEach((layer) => {
+    const el = layer.getElement();
+    if (el) {
+      el.classList.remove("active");
+      if (impact === "positive") {
+        el.classList.add("positive");
+        el.classList.remove("negative");
+      } else if (impact === "negative") {
+        el.classList.add("negative");
+        el.classList.remove("positive");
+      } else {
+        el.classList.remove("positive", "negative");
+      }
+    }
     if (impact === "positive") {
-      layer.setStyle(positiveStateStyle);
+      layer.setStyle(getPositiveStateStyle());
     } else if (impact === "negative") {
-      layer.setStyle(negativeStateStyle);
+      layer.setStyle(getNegativeStateStyle());
     } else {
-      layer.setStyle(baseStateStyle);
+      layer.setStyle(getBaseStateStyle());
     }
   });
 };
@@ -1464,8 +1499,10 @@ const setStateImpact = (stateName, impact) => {
 function createAgentCard(agent) {
   const card = document.createElement("div");
   card.className = "agent-card";
-  card.dataset.agentName = agent?.name || "Council";
-  if (agent?.name === "System") {
+  const isModerator = agent?.name === "System" || agent?.name === "Session Moderator";
+  const agentDisplayName = isModerator ? "Session Moderator" : (agent?.name || "Council");
+  card.dataset.agentName = agentDisplayName;
+  if (isModerator) {
     card.classList.add("system");
   } else if (agent?.state) {
     card.classList.add("state-agent");
@@ -1481,7 +1518,7 @@ function createAgentCard(agent) {
   card.innerHTML = `
     <div class="${avatarClass}"></div>
     <div>
-      <div class="agent-name">${agent.name || "Council"} ${role}</div>
+      <div class="agent-name">${agentDisplayName} ${role}</div>
       <div class="agent-speech-list">
         ${hasMessage ? `<div class="agent-speech">${messageText}</div>` : ""}
       </div>
@@ -2027,7 +2064,7 @@ const upsertAgentMessage = (payload) => {
 };
 
 const addSystemNote = (message, options = {}) => {
-  const note = createAgentCard({ name: "System", message, muted: true });
+  const note = createAgentCard({ name: "Session Moderator", message, muted: true });
   const speechList = note.querySelector(".agent-speech-list");
   const isLoading = Boolean(options.loading);
   if (speechList && message?.includes("\n")) {
@@ -2038,13 +2075,34 @@ const addSystemNote = (message, options = {}) => {
       if (isLoading && index === 0) {
         entry.classList.add("loading");
       }
-      entry.textContent = line;
+      if (line.startsWith("Positively impacted:")) {
+        entry.classList.add("agent-speech--positive-impact");
+        const rest = line.substring("Positively impacted:".length);
+        entry.innerHTML = `<span class="impact-label impact-label--positive">Positively impacted:</span><span class="impact-states impact-states--positive">${escapeHtml(rest)}</span>`;
+      } else if (line.startsWith("Negatively impacted:")) {
+        entry.classList.add("agent-speech--negative-impact");
+        const rest = line.substring("Negatively impacted:".length);
+        entry.innerHTML = `<span class="impact-label impact-label--negative">Negatively impacted:</span><span class="impact-states impact-states--negative">${escapeHtml(rest)}</span>`;
+      } else {
+        entry.textContent = line;
+      }
       speechList.appendChild(entry);
     });
   } else if (speechList) {
     const entry = speechList.querySelector(".agent-speech");
-    if (entry && isLoading) {
-      entry.classList.add("loading");
+    if (entry) {
+      if (isLoading) {
+        entry.classList.add("loading");
+      }
+      if (message.startsWith("Positively impacted:")) {
+        entry.classList.add("agent-speech--positive-impact");
+        const rest = message.substring("Positively impacted:".length);
+        entry.innerHTML = `<span class="impact-label impact-label--positive">Positively impacted:</span><span class="impact-states impact-states--positive">${escapeHtml(rest)}</span>`;
+      } else if (message.startsWith("Negatively impacted:")) {
+        entry.classList.add("agent-speech--negative-impact");
+        const rest = message.substring("Negatively impacted:".length);
+        entry.innerHTML = `<span class="impact-label impact-label--negative">Negatively impacted:</span><span class="impact-states impact-states--negative">${escapeHtml(rest)}</span>`;
+      }
     }
   }
   const roundId = normalizeRoundId(options.round);
@@ -2085,6 +2143,11 @@ const streamCardMessage = (card, message, options = {}) =>
     let charIndex = 0;
     let currentEntry = document.createElement("div");
     currentEntry.className = "agent-speech system-streaming";
+    if (lines[0]?.startsWith("Positively impacted:")) {
+      currentEntry.classList.add("agent-speech--positive-impact");
+    } else if (lines[0]?.startsWith("Negatively impacted:")) {
+      currentEntry.classList.add("agent-speech--negative-impact");
+    }
     if (options.loading) {
       currentEntry.classList.add("loading");
     }
@@ -2102,6 +2165,21 @@ const streamCardMessage = (card, message, options = {}) =>
       if (timer) {
         clearInterval(timer);
       }
+      const entries = speechList.querySelectorAll(".agent-speech");
+      lines.forEach((l, idx) => {
+        const ent = entries[idx];
+        if (!ent) return;
+        ent.classList.remove("system-streaming");
+        if (l.startsWith("Positively impacted:")) {
+          ent.classList.add("agent-speech--positive-impact");
+          const rest = l.substring("Positively impacted:".length);
+          ent.innerHTML = `<span class="impact-label impact-label--positive">Positively impacted:</span><span class="impact-states impact-states--positive">${escapeHtml(rest)}</span>`;
+        } else if (l.startsWith("Negatively impacted:")) {
+          ent.classList.add("agent-speech--negative-impact");
+          const rest = l.substring("Negatively impacted:".length);
+          ent.innerHTML = `<span class="impact-label impact-label--negative">Negatively impacted:</span><span class="impact-states impact-states--negative">${escapeHtml(rest)}</span>`;
+        }
+      });
       resolve(card);
     };
 
@@ -2117,6 +2195,16 @@ const streamCardMessage = (card, message, options = {}) =>
       }
 
       currentEntry.classList.remove("system-streaming");
+      if (line.startsWith("Positively impacted:")) {
+        currentEntry.classList.add("agent-speech--positive-impact");
+        const rest = line.substring("Positively impacted:".length);
+        currentEntry.innerHTML = `<span class="impact-label impact-label--positive">Positively impacted:</span><span class="impact-states impact-states--positive">${escapeHtml(rest)}</span>`;
+      } else if (line.startsWith("Negatively impacted:")) {
+        currentEntry.classList.add("agent-speech--negative-impact");
+        const rest = line.substring("Negatively impacted:".length);
+        currentEntry.innerHTML = `<span class="impact-label impact-label--negative">Negatively impacted:</span><span class="impact-states impact-states--negative">${escapeHtml(rest)}</span>`;
+      }
+
       lineIndex += 1;
       if (lineIndex >= lines.length) {
         finishStream();
@@ -2126,6 +2214,12 @@ const streamCardMessage = (card, message, options = {}) =>
       charIndex = 0;
       currentEntry = document.createElement("div");
       currentEntry.className = "agent-speech system-streaming";
+      const nextLine = lines[lineIndex] || "";
+      if (nextLine.startsWith("Positively impacted:")) {
+        currentEntry.classList.add("agent-speech--positive-impact");
+      } else if (nextLine.startsWith("Negatively impacted:")) {
+        currentEntry.classList.add("agent-speech--negative-impact");
+      }
       if (options.loading) {
         currentEntry.classList.add("loading");
       }
@@ -2137,7 +2231,7 @@ const streamCardMessage = (card, message, options = {}) =>
 
 const streamSystemNote = (message, options = {}) =>
   new Promise((resolve) => {
-    const note = createAgentCard({ name: "System", message: "", muted: true });
+    const note = createAgentCard({ name: "Session Moderator", message: "", muted: true });
 
     const roundId = normalizeRoundId(options.round);
     if (roundId !== null) {
@@ -2301,7 +2395,7 @@ const connectLiveStream = () => {
     return;
   }
 
-  const token = localStorage.getItem("llmCouncilIdToken");
+  const token = localStorage.getItem("agenticCouncilIdToken");
   const streamUrl = token ? `/api/stream?token=${encodeURIComponent(token)}` : "/api/stream";
   const stream = new EventSource(streamUrl);
   stream.addEventListener("open", () => {
@@ -2553,9 +2647,13 @@ const connectLiveStream = () => {
       updateFeedEmptyState();
     }
     
+    clearActiveState();
     stateLayer.eachLayer((layer) => {
-      layer.getElement()?.classList.remove("active");
-      layer.setStyle(baseStateStyle);
+      const el = layer.getElement();
+      if (el) {
+        el.classList.remove("active", "positive", "negative");
+      }
+      layer.setStyle(getBaseStateStyle());
     });
     stateImpact.clear();
 
@@ -2686,9 +2784,13 @@ if (fetchNextBtn) {
     fetchLocked = true;
     setDebateLocked(true);
     showSummarizingState(query);
+    clearActiveState();
     stateLayer.eachLayer((layer) => {
-      layer.getElement()?.classList.remove("active");
-      layer.setStyle(baseStateStyle);
+      const el = layer.getElement();
+      if (el) {
+        el.classList.remove("active", "positive", "negative");
+      }
+      layer.setStyle(getBaseStateStyle());
     });
     stateImpact.clear();
 
@@ -3126,15 +3228,56 @@ const initUserProfileMenu = () => {
     }
     const topbarInitial = document.getElementById("user-avatar-initial");
     const topbarIcon = document.querySelector("#user-avatar-circle .user-avatar-icon");
-    if (topbarInitial && firstLetter) {
-      topbarInitial.textContent = firstLetter;
-      topbarInitial.style.display = "block";
+    const topbarImg = document.getElementById("user-avatar-image");
+    const dropdownImg = document.getElementById("user-dropdown-avatar-image");
+    const dropdownSvg = document.querySelector("#user-dropdown-avatar svg");
+    const photoUrl = user.photoURL || user.photoUrl || user.picture || user.avatarUrl || "";
+
+    if (photoUrl) {
+      if (topbarImg) {
+        topbarImg.src = photoUrl;
+        topbarImg.style.display = "block";
+        topbarImg.onerror = () => {
+          topbarImg.style.display = "none";
+          if (topbarInitial && firstLetter) {
+            topbarInitial.style.display = "block";
+          } else if (topbarIcon) {
+            topbarIcon.style.display = "block";
+          }
+        };
+      }
+      if (topbarInitial) topbarInitial.style.display = "none";
       if (topbarIcon) topbarIcon.style.display = "none";
+
+      if (dropdownImg) {
+        dropdownImg.src = photoUrl;
+        dropdownImg.style.display = "block";
+        dropdownImg.onerror = () => {
+          dropdownImg.style.display = "none";
+          if (dropdownSvg) dropdownSvg.style.display = "block";
+          if (avatarInitial) avatarInitial.textContent = firstLetter;
+        };
+        if (dropdownSvg) dropdownSvg.style.display = "none";
+      }
+    } else {
+      if (topbarImg) topbarImg.style.display = "none";
+      if (dropdownImg) dropdownImg.style.display = "none";
+      if (dropdownSvg) dropdownSvg.style.display = "block";
+      if (topbarInitial && firstLetter) {
+        topbarInitial.textContent = firstLetter;
+        topbarInitial.style.display = "block";
+        if (topbarIcon) topbarIcon.style.display = "none";
+      } else if (topbarIcon) {
+        topbarIcon.style.display = "block";
+      }
+      if (avatarInitial) {
+        avatarInitial.textContent = firstLetter;
+      }
     }
   };
 
   try {
-    const cached = localStorage.getItem("llmCouncilUser");
+    const cached = localStorage.getItem("agenticCouncilUser");
     if (cached) {
       const u = JSON.parse(cached);
       applyUserData(u);
@@ -3145,11 +3288,28 @@ const initUserProfileMenu = () => {
     .then((r) => (r.ok ? r.json() : null))
     .then((res) => {
       if (res?.user) {
-        localStorage.setItem("llmCouncilUser", JSON.stringify(res.user));
+        localStorage.setItem("agenticCouncilUser", JSON.stringify(res.user));
         applyUserData(res.user);
       }
     })
     .catch(() => {});
+
+  if (window.firebase && typeof window.firebase.auth === "function") {
+    try {
+      const auth = window.firebase.auth();
+      auth.onAuthStateChanged((fbUser) => {
+        if (fbUser && fbUser.photoURL) {
+          const cachedRaw = localStorage.getItem("agenticCouncilUser");
+          const cachedUser = cachedRaw ? JSON.parse(cachedRaw) : {};
+          if (!cachedUser.photoURL) {
+            cachedUser.photoURL = fbUser.photoURL;
+            localStorage.setItem("agenticCouncilUser", JSON.stringify(cachedUser));
+          }
+          applyUserData({ ...cachedUser, photoURL: fbUser.photoURL });
+        }
+      });
+    } catch (_) {}
+  }
 
   const toggleDropdown = (open) => {
     const isOpen = typeof open === "boolean" ? open : !dropdown.classList.contains("open");
@@ -3184,8 +3344,8 @@ const initUserProfileMenu = () => {
   signoutBtn?.addEventListener("click", async () => {
     toggleDropdown(false);
     try {
-      localStorage.removeItem("llmCouncilIdToken");
-      localStorage.removeItem("llmCouncilUser");
+      localStorage.removeItem("agenticCouncilIdToken");
+      localStorage.removeItem("agenticCouncilUser");
       sessionStorage.clear();
       if (window.firebase && typeof window.firebase.auth === "function") {
         try {

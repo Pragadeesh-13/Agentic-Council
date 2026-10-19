@@ -39,10 +39,20 @@ if (signupForm) {
       return;
     }
 
-    if (signupButton) {
-      signupButton.disabled = true;
-      signupButton.textContent = "Creating account...";
-    }
+    const setSignupBtnState = (disabled, text) => {
+      if (!signupButton) return;
+      signupButton.disabled = disabled;
+      const labelEl = signupButton.querySelector(".btn-text");
+      const arrowEl = signupButton.querySelector(".btn-arrow-icon");
+      if (labelEl) {
+        labelEl.textContent = text;
+        if (arrowEl) arrowEl.style.display = disabled ? "none" : "";
+      } else {
+        signupButton.textContent = text;
+      }
+    };
+
+    setSignupBtnState(true, "Creating account...");
 
     try {
       const response = await fetch("/api/auth/signup", {
@@ -64,33 +74,38 @@ if (signupForm) {
     } catch (error) {
       setSignupFeedback("Unable to reach server. Please try again.");
     } finally {
-      if (signupButton) {
-        signupButton.disabled = false;
-        signupButton.textContent = "Create Account";
-      }
+      setSignupBtnState(false, "Create Account");
     }
   });
 }
+
+const setGoogleBtnText = (text) => {
+  if (!googleButton) return;
+  const labelEl = googleButton.querySelector(".google-btn-text");
+  if (labelEl) {
+    labelEl.textContent = text;
+  } else {
+    googleButton.textContent = text;
+  }
+};
 
 if (googleButton) {
   googleButton.addEventListener("click", async () => {
     setSignupFeedback("");
 
-    if (typeof window.llmCouncilGoogleSignIn !== "function") {
+    if (typeof window.agenticCouncilGoogleSignIn !== "function") {
       setSignupFeedback("Google sign-in is not available right now.");
       return;
     }
 
     googleButton.disabled = true;
-    const originalLabel = googleButton.textContent;
-    googleButton.textContent = "Connecting to Google...";
+    const originalLabel = googleButton.querySelector(".google-btn-text")?.textContent || "Sign in with Google";
+    setGoogleBtnText("Connecting to Google...");
 
     try {
-      await window.llmCouncilGoogleSignIn((statusText) => {
+      await window.agenticCouncilGoogleSignIn((statusText) => {
         setSignupFeedback(statusText || "Signing in...", "success");
-        if (googleButton) {
-          googleButton.textContent = statusText || "Signing in...";
-        }
+        setGoogleBtnText(statusText || "Signing in...");
       });
     } catch (error) {
       const message = String(error?.message || "");
@@ -102,22 +117,22 @@ if (googleButton) {
         setSignupFeedback(`Google sign-in failed. ${message || "Please try again."}`);
       }
       googleButton.disabled = false;
-      googleButton.textContent = originalLabel;
+      setGoogleBtnText(originalLabel);
     }
   });
 }
 
-if (typeof window.llmCouncilResumeGoogleSignIn === "function") {
-  const hasRedirectMarker = Boolean(sessionStorage.getItem("llmCouncilGoogleRedirect"));
+if (typeof window.agenticCouncilResumeGoogleSignIn === "function") {
+  const hasRedirectMarker = Boolean(sessionStorage.getItem("agenticCouncilGoogleRedirect"));
   if (hasRedirectMarker) {
     setSignupFeedback("Completing Google sign-in...");
     if (googleButton) {
       googleButton.disabled = true;
-      googleButton.textContent = "Completing sign-in...";
+      setGoogleBtnText("Completing sign-in...");
     }
   }
 
-  window.llmCouncilResumeGoogleSignIn().then(({ user, error }) => {
+  window.agenticCouncilResumeGoogleSignIn().then(({ user, error }) => {
     if (user) return; // navigation is in flight
 
     if (error) {
@@ -127,7 +142,89 @@ if (typeof window.llmCouncilResumeGoogleSignIn === "function") {
     }
     if (googleButton) {
       googleButton.disabled = false;
-      googleButton.textContent = "Sign in with Google";
+      setGoogleBtnText("Sign in with Google");
     }
   });
+}
+
+const initThemeToggle = () => {
+  const toggleBtn = document.getElementById("theme-toggle-btn");
+  if (!toggleBtn) return;
+  toggleBtn.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme") || "light";
+    const next = current === "light" ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", next);
+    try {
+      localStorage.setItem("policy_sim_theme", next);
+    } catch (e) {}
+  });
+};
+
+initThemeToggle();
+
+const initTypographicRotator = () => {
+  const textEl = document.getElementById("brand-title-text");
+  if (!textEl) return;
+
+  const phrases = [
+    "Welcome to Agentic Council.",
+    "Simulate any Policy.",
+    "Sign up to Continue.",
+  ];
+
+  let phraseIndex = 0;
+  let charIndex = phrases[0].length;
+  let isDeleting = false;
+  let isRunning = true;
+
+  let timer = setTimeout(() => {
+    isDeleting = true;
+    tick();
+  }, 3200);
+
+  function tick() {
+    if (!isRunning) return;
+    const current = phrases[phraseIndex];
+
+    if (isDeleting) {
+      charIndex--;
+      textEl.textContent = current.substring(0, charIndex);
+
+      if (charIndex === 0) {
+        isDeleting = false;
+        phraseIndex = (phraseIndex + 1) % phrases.length;
+        timer = setTimeout(tick, 320);
+        return;
+      }
+      timer = setTimeout(tick, 26);
+    } else {
+      charIndex++;
+      textEl.textContent = current.substring(0, charIndex);
+
+      if (charIndex === current.length) {
+        isDeleting = true;
+        timer = setTimeout(tick, 2800);
+        return;
+      }
+      const speed = 45 + Math.random() * 30;
+      timer = setTimeout(tick, speed);
+    }
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      clearTimeout(timer);
+    } else {
+      clearTimeout(timer);
+      timer = setTimeout(tick, 500);
+    }
+  });
+};
+
+initTypographicRotator();
+
+const brandLogoVideo = document.querySelector("video.brand-logo");
+if (brandLogoVideo) {
+  brandLogoVideo.muted = true;
+  brandLogoVideo.play().catch(() => {});
 }

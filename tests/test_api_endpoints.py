@@ -65,6 +65,24 @@ def test_auth_login():
     assert data["user"]["username"] == "alice"
 
 
+def test_auth_google_with_photo():
+    res = client.post(
+        "/api/auth/google",
+        json={
+            "idToken": "google_test_token_123",
+            "email": "alice@gmail.com",
+            "displayName": "Alice Google",
+            "uid": "google_uid_123",
+            "photoURL": "https://lh3.googleusercontent.com/a/test-avatar",
+        },
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["ok"] is True
+    assert data["user"]["photoURL"] == "https://lh3.googleusercontent.com/a/test-avatar"
+    assert data["user"]["email"] == "alice@gmail.com"
+
+
 def test_static_index_serving():
     res = client.get("/")
     assert res.status_code == 200

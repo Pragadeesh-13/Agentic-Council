@@ -1358,13 +1358,35 @@ body {
 }
 
 .state-path.positive {
-  fill: rgba(56, 204, 118, 0.35);
-  stroke: rgba(56, 204, 118, 0.85);
+  fill: rgba(34, 197, 94, 0.5) !important;
+  stroke: #22c55e !important;
+  stroke-width: 2px !important;
+  fill-opacity: 0.7 !important;
+  stroke-opacity: 1 !important;
+}
+
+[data-theme="light"] .state-path.positive {
+  fill: rgba(34, 197, 94, 0.42) !important;
+  stroke: #16a34a !important;
+  stroke-width: 2px !important;
+  fill-opacity: 0.75 !important;
+  stroke-opacity: 1 !important;
 }
 
 .state-path.negative {
-  fill: rgba(230, 74, 74, 0.35);
-  stroke: rgba(230, 74, 74, 0.85);
+  fill: rgba(239, 68, 68, 0.5) !important;
+  stroke: #ef4444 !important;
+  stroke-width: 2px !important;
+  fill-opacity: 0.7 !important;
+  stroke-opacity: 1 !important;
+}
+
+[data-theme="light"] .state-path.negative {
+  fill: rgba(239, 68, 68, 0.42) !important;
+  stroke: #dc2626 !important;
+  stroke-width: 2px !important;
+  fill-opacity: 0.75 !important;
+  stroke-opacity: 1 !important;
 }
 
 @keyframes glow-pulse {
@@ -1951,6 +1973,72 @@ body {
   color: var(--system-speech-text);
 }
 
+.agent-card.system .agent-speech.agent-speech--positive-impact,
+.agent-speech.agent-speech--positive-impact {
+  border-left: 3.5px solid #22c55e !important;
+  background: rgba(34, 197, 94, 0.1) !important;
+  color: #f0fdf4 !important;
+}
+
+.agent-speech.agent-speech--positive-impact .impact-label {
+  color: #22c55e;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.agent-speech.agent-speech--positive-impact .impact-states {
+  color: #86efac;
+  font-weight: 600;
+}
+
+[data-theme="light"] .agent-card.system .agent-speech.agent-speech--positive-impact,
+[data-theme="light"] .agent-speech.agent-speech--positive-impact {
+  border-left: 3.5px solid #16a34a !important;
+  background: rgba(34, 197, 94, 0.12) !important;
+  color: #14532d !important;
+}
+
+[data-theme="light"] .agent-speech.agent-speech--positive-impact .impact-label {
+  color: #15803d;
+}
+
+[data-theme="light"] .agent-speech.agent-speech--positive-impact .impact-states {
+  color: #166534;
+}
+
+.agent-card.system .agent-speech.agent-speech--negative-impact,
+.agent-speech.agent-speech--negative-impact {
+  border-left: 3.5px solid #ef4444 !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #fef2f2 !important;
+}
+
+.agent-speech.agent-speech--negative-impact .impact-label {
+  color: #ef4444;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.agent-speech.agent-speech--negative-impact .impact-states {
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+[data-theme="light"] .agent-card.system .agent-speech.agent-speech--negative-impact,
+[data-theme="light"] .agent-speech.agent-speech--negative-impact {
+  border-left: 3.5px solid #dc2626 !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+  color: #7f1d1d !important;
+}
+
+[data-theme="light"] .agent-speech.agent-speech--negative-impact .impact-label {
+  color: #b91c1c;
+}
+
+[data-theme="light"] .agent-speech.agent-speech--negative-impact .impact-states {
+  color: #991b1b;
+}
+
 /* Top Banner: Thinking Banner */
 .thinking-banner {
   display: flex;
@@ -2479,6 +2567,8 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 50%;
+  overflow: hidden;
+  position: relative;
   background: var(--btn-bg);
   border: 1px solid var(--btn-border);
   box-shadow: var(--btn-shadow);
@@ -2491,6 +2581,14 @@ body {
   font-weight: 600;
   letter-spacing: 0.04em;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, color 0.25s ease, background 0.25s ease;
+}
+
+.user-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .user-avatar-btn:hover .user-avatar-circle,
@@ -2562,6 +2660,8 @@ body {
   width: 36px;
   height: 36px;
   border-radius: 50%;
+  overflow: hidden;
+  position: relative;
   background: var(--btn-bg);
   border: 1px solid var(--btn-border);
   box-shadow: var(--btn-shadow);
@@ -2574,6 +2674,14 @@ body {
   font-size: 13px;
   letter-spacing: 0.08em;
   transition: background 0.25s ease, color 0.25s ease;
+}
+
+.user-dropdown-avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .user-dropdown-info {
