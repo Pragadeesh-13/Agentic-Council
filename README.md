@@ -1,87 +1,140 @@
-# Policy Sim v3 — Federal Council AI Deliberation Platform
+# Agentic Council — Multi-Agent Federal Policy Deliberation Platform
 
-Recreation of `policy-sim-v2` in high-performance **Python (FastAPI + AsyncIO + Uvicorn)** preserving the exact UI design, styles, and multi-agent deliberation simulation.
-
----
-
-## 🏛️ System Overview
-
-Policy Sim v3 simulates a multi-agent Indian federal council debating national policies across 5 sequential rounds:
-1. **Round 0: Impact Declarations**: All 10 council states assess immediate economic/political impacts.
-2. **Round 1: Opening Statements**: Top 5 most impacted states deliver speeches with strategic reasoning (`<thought>` tags filtered from public stream).
-3. **Round 2: Rebuttals**: Top 3 opposing states directly confront and quote opposing state delegates.
-4. **Round 3: Right of Reply**: The most targeted/attacked state delivers their final defense.
-5. **Round 4: Summary & Economic Verdict**: Strategic summary, winners/losers categorization, and state-by-state economic sentiment scoring.
+Agentic Council is an asynchronous simulation platform built with Python (FastAPI, AsyncIO, Uvicorn) that models multi-agent federal council deliberations on national public policy proposals. The system orchestrates autonomous state delegates with distinct economic profiles, regional interests, and political alignments across structured debate rounds, producing real-time streamed arguments, interactive visual maps, and quantitative economic verdicts.
 
 ---
 
-## ⚙️ Architecture
+## Overview
+
+Agentic Council simulates a multi-agent deliberation process across five sequential rounds:
+
+1. **Round 0: Impact Declarations**: All participating state delegations assess immediate economic, fiscal, and regulatory impacts based on their unique demographics and industrial baselines.
+2. **Round 1: Opening Statements**: The most impacted states present formal opening positions, incorporating strategic policy analysis with optional streaming reasoning traces.
+3. **Round 2: Cross-Examination and Rebuttals**: Opposing state delegations engage in direct counter-arguments, citing and refuting specific delegate claims.
+4. **Round 3: Right of Reply**: The most targeted state delegation delivers a focused strategic defense and policy clarification.
+5. **Round 4: Synthesis and Economic Verdict**: The council computes regional sentiment distributions, winners and losers classifications, and national consensus metrics.
+
+---
+
+## System Architecture
 
 ```
-policy-sim-v3/
+policy-sim-local/
 ├── app/
-│   ├── auth/           # AES-256-GCM encryption, KeyVault, SessionGuard
-│   ├── http/           # SseManager (broadcast, client registry, throttling)
-│   ├── personas/       # 10 State Profiles, Political Alliances, Rosters
-│   ├── prompts/        # Council, Selection, Verdict, and Policy Prompts
-│   ├── providers/      # OpenRouter, OpenAI, Anthropic, Groq, Mock Drivers
-│   ├── simulation/     # Orchestrator, RoundBarrier, KeywordAnalyzer, State
-│   ├── utils/          # ThoughtBuffer, Sanitizer, JsonExtractor
-│   ├── config.py       # Pydantic Settings & environment variables
-│   └── main.py         # FastAPI application with REST & SSE endpoints
-├── public/             # Byte-for-byte identical HTML, CSS, JS, and GeoJSON assets
-├── tests/              # Pytest test suite (38 unit & integration tests)
-├── run.py              # Server launcher
-├── requirements.txt    # Python dependencies
-└── .env.example        # Environment variables template
+│   ├── auth/           # AES-256-GCM encrypted credential vault and session management
+│   ├── http/           # Server-Sent Events (SSE) broadcast engine and client registry
+│   ├── personas/       # State persona profiles, geopolitical interests, and alliances
+│   ├── prompts/        # Deliberation, cross-examination, and verdict prompt templates
+│   ├── providers/      # OpenRouter, OpenAI, Anthropic, Groq, and Mock provider drivers
+│   ├── simulation/     # Orchestrator, round barriers, keyword analysis, and state machines
+│   ├── utils/          # Thought buffer parsing, content sanitization, and JSON extraction
+│   ├── config.py       # Pydantic settings schema and environment parsing
+│   └── main.py         # FastAPI application exposing REST and SSE streaming endpoints
+├── public/             # Single-page web interface, stylesheet themes, and GeoJSON maps
+├── tests/              # Pytest automated test suite (48 unit and integration tests)
+├── run.py              # Application launch entry point
+├── requirements.txt    # Project runtime dependencies
+└── .env.example        # Environment variable configuration template
 ```
 
 ---
 
-## 🚀 Getting Started
+## Key Features
 
-### 1. Requirements
-- Python 3.11+ (tested on Python 3.14)
+- **Asynchronous Deliberation Pipeline**: Built on Python `asyncio` with barrier synchronization (`RoundBarrier`) ensuring turn progression across concurrent agents.
+- **Multi-Provider LLM Integration**: Pluggable provider architecture supporting OpenRouter, OpenAI, Anthropic, Groq, local inference engines (such as LM Studio and Ollama via OpenAI-compatible APIs), and deterministic mock drivers.
+- **Real-Time Streaming**: Server-Sent Events (SSE) engine broadcasting live agent thoughts, argument tokens, and consensus updates directly to the client interface.
+- **Secure Key Management**: Client-provided API credentials are protected via AES-256-GCM encryption with per-session isolation (`KeyVault`).
+- **Flexible Authentication**: Configurable authentication supporting standard credentials, optional guest modes, and Firebase / Google OAuth integration.
+- **Theme-Aware Interface**: Modern user interface featuring light and dark color schemes, responsive deliberation tracking, and dynamic typing interfaces.
 
-### 2. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+---
 
-### 3. Environment Configuration
-Copy `.env.example` to `.env`:
+## Getting Started
+
+### Prerequisites
+
+- Python 3.11 or higher (verified on Python 3.14)
+- Git
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Pragadeesh-13/Policy-sim-local.git
+   cd Policy-sim-local
+   ```
+
+2. Create and activate a virtual environment:
+   ```bash
+   python -m venv .venv
+   # Windows:
+   .venv\Scripts\activate
+   # Linux / macOS:
+   source .venv/bin/activate
+   ```
+
+3. Install required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Configuration
+
+Create a `.env` file based on `.env.example`:
 ```bash
 cp .env.example .env
 ```
-Only 3-4 variables are needed:
-- `PORT=3000`
-- `LLM_PROVIDER=openrouter` (or `openai`, `anthropic`, `groq`, `mock`)
-- `LLM_MODEL=openai/gpt-6.1-sol-pro`
-- `LLM_API_KEY=your_key_here`
 
-### 4. Run the Server
+Configure the relevant environment variables:
+
+| Variable | Description | Default |
+|---|---|---|
+| `PORT` | HTTP server port | `3000` |
+| `LLM_PROVIDER` | LLM service provider (`openrouter`, `openai`, `anthropic`, `groq`, `mock`) | `openrouter` |
+| `LLM_MODEL` | Model identifier string | `openai/gpt-6.1-sol-pro` |
+| `LLM_API_KEY` | Server-level default API key for the selected provider | `""` |
+| `SHOW_REASONING` | Toggle live streaming of agent reasoning and thought buffers | `false` |
+| `AUTH_MODE` | Authentication requirement level (`optional`, `required`, `disabled`) | `optional` |
+| `PUBLIC_URL` | Base public URL for the server instance | `http://localhost:3000` |
+| `PANEL_SIZE` | Number of state delegates selected for detailed debate rounds | `5` |
+| `REBUTTAL_SIZE` | Number of state delegates selected for direct rebuttal rounds | `3` |
+
+### Running the Application
+
+Launch the server using the entry point script:
 ```bash
 python run.py
 ```
-Or with Uvicorn directly:
+
+Alternatively, run directly via Uvicorn:
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 3000
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+Once running, navigate to [http://localhost:3000](http://localhost:3000) in your web browser.
 
 ---
 
-## 🧪 Testing
+## Testing
 
-Run the full automated test suite:
+Execute the test suite using `pytest`:
 ```bash
 python -m pytest tests/ -v
 ```
-All 38 unit and integration tests execute in < 2 seconds, covering:
-- Thought buffer token streaming & tag filtering
-- Resilient JSON extraction and code fence parsing
-- Persona roster building & alliance resolution
-- Round barrier synchronization & step gating
-- Sentiment scoring & keyword analysis
-- REST endpoints (`/health`, `/api/config`, `/api/models`, `/api/auth/*`)
-- End-to-end multi-agent council deliberation pipeline
+
+The test suite covers:
+- Thought buffer token streaming and tag extraction
+- JSON response extraction and markdown code block parsing
+- Persona profile construction and alliance mapping
+- Round barrier concurrency and execution synchronization
+- Keyword analysis and sentiment aggregation
+- Session security and credential encryption
+- REST API and Server-Sent Event endpoints
+- End-to-end deliberation pipeline execution
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
