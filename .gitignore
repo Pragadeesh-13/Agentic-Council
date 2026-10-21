@@ -11,3 +11,4 @@ venv/
 htmlcov/
 .env
 firebase_creds.json
+.DS_Store
