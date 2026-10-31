@@ -93,12 +93,13 @@ async def resolve_session_config(request: Request) -> Dict[str, Any]:
     provider = (stored.get("provider") if stored else None) or settings.llm_provider
     model = (stored.get("model") if stored else None) or settings.llm_model
     api_key = (stored.get("apiKey") if stored else None) or settings.llm_api_key
-    base_url = provider_base_url(provider) or ""
+    base_url = (stored.get("baseUrl") if stored and stored.get("baseUrl") else None) or provider_base_url(provider) or ""
 
     session_driver = create_driver(
         provider,
         model=model,
         api_key=api_key,
+        base_url=base_url,
         public_url=settings.public_url,
         timeout_ms=settings.llm_timeout_ms,
         stream_idle_timeout_ms=settings.llm_stream_idle_timeout_ms,
@@ -239,6 +240,9 @@ async def next_policy(request: Request, query: str = ""):
     provider = str(body.get("provider") if body.get("provider") is not None else sess_cfg.get("provider", "")).strip().lower()
     api_key = str(body.get("apiKey") if body.get("apiKey") is not None else sess_cfg.get("apiKey", "")).strip()
     model = str(body.get("model") if body.get("model") is not None else sess_cfg.get("model", "")).strip()
+    base_url = str(body.get("baseUrl") if body.get("baseUrl") is not None else sess_cfg.get("baseUrl", "")).strip()
+    if not base_url:
+        base_url = provider_base_url(provider) or ""
 
     if not provider:
         return JSONResponse(status_code=400, content={"ok": False, "error": "Provider has not been selected."})
@@ -253,13 +257,14 @@ async def next_policy(request: Request, query: str = ""):
         return JSONResponse(status_code=400, content={"ok": False, "error": "API key has not been entered."})
 
     user = getattr(request.state, "session_user", None)
-    await key_vault.put(user, {"provider": provider, "model": model, "apiKey": api_key})
+    await key_vault.put(user, {"provider": provider, "model": model, "apiKey": api_key, "baseUrl": base_url})
 
     # Build active run driver
     run_driver = create_driver(
         provider,
         model=model,
         api_key=api_key,
+        base_url=base_url,
         public_url=settings.public_url,
         timeout_ms=settings.llm_timeout_ms,
         stream_idle_timeout_ms=settings.llm_stream_idle_timeout_ms,
@@ -326,9 +331,12 @@ async def post_config(request: Request):
 
     model = str(body.get("model") if body.get("model") is not None else sess_cfg["model"]).strip()
     api_key = str(body.get("apiKey") if body.get("apiKey") is not None else sess_cfg["apiKey"]).strip()
+    base_url = str(body.get("baseUrl") if body.get("baseUrl") is not None else sess_cfg.get("baseUrl", "")).strip()
+    if not base_url:
+        base_url = provider_base_url(provider) or ""
 
     user = getattr(request.state, "session_user", None)
-    saved = await key_vault.put(user, {"provider": provider, "model": model, "apiKey": api_key})
+    saved = await key_vault.put(user, {"provider": provider, "model": model, "apiKey": api_key, "baseUrl": base_url})
 
     session.sse_manager.broadcast("status", {"model": model, "provider": provider})
 
@@ -336,7 +344,7 @@ async def post_config(request: Request):
         "ok": True,
         "provider": provider,
         "model": model,
-        "baseUrl": provider_base_url(provider) or "",
+        "baseUrl": base_url,
         "hasApiKey": bool(api_key),
         "persisted": saved.get("persisted", False),
         "showReasoning": getattr(settings, "show_reasoning", False),
@@ -352,8 +360,9 @@ async def get_models(request: Request, provider: Optional[str] = None):
         return JSONResponse(status_code=400, content={"ok": False, "error": f"Unsupported provider '{target_provider}'."})
 
     api_key = request.headers.get("x-api-key") or sess_cfg["apiKey"] or ""
-    temp_driver = create_driver(target_provider, api_key=api_key)
-    res = await temp_driver.fetch_models(api_key=api_key)
+    custom_base_url = request.query_params.get("baseUrl") or sess_cfg.get("baseUrl") or provider_base_url(target_provider) or ""
+    temp_driver = create_driver(target_provider, api_key=api_key, base_url=custom_base_url)
+    res = await temp_driver.fetch_models(api_key=api_key, base_url=custom_base_url)
     return res
 
 

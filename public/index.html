@@ -203,6 +203,26 @@
                 </div>
               </div>
 
+              <div class="config-field" id="base-url-field" style="display: none;">
+                <label for="base-url-input" class="config-label">
+                  <span>Base URL</span>
+                  <span class="config-label-sub" id="base-url-hint">Local / Tunnel URL</span>
+                </label>
+                <div class="config-input-wrapper">
+                  <input
+                    type="text"
+                    class="config-input"
+                    id="base-url-input"
+                    placeholder="http://localhost:1235/v1 or https://...ngrok-free.app/v1"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </div>
+                <div class="config-helper-text" id="base-url-helper" style="font-size: 11px; opacity: 0.7; margin-top: 4px; line-height: 1.4;">
+                  On web deployments: expose local LM Studio using <code>ngrok http 1235</code> and paste the HTTPS URL here.
+                </div>
+              </div>
+
               </div>
 
             <button class="feed-btn" id="fetch-next" type="button">Begin Simulation</button>

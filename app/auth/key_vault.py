@@ -36,6 +36,7 @@ class KeyVault:
             "provider": rec.get("provider", "openrouter"),
             "model": rec.get("model", ""),
             "apiKey": api_key,
+            "baseUrl": rec.get("baseUrl", ""),
             "maskedKey": mask_secret(api_key),
             "persisted": rec.get("persisted", False),
         }
@@ -45,11 +46,13 @@ class KeyVault:
         provider = (record.get("provider") or "openrouter").strip().lower()
         model = record.get("model", "").strip()
         api_key = record.get("apiKey", "").strip()
+        base_url = str(record.get("baseUrl") or "").strip()
 
         data = {
             "provider": provider,
             "model": model,
             "apiKey": api_key,
+            "baseUrl": base_url,
             "persisted": slot_key != "__guest__",
         }
 

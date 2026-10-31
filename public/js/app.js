@@ -2868,6 +2868,8 @@ if (fetchNextBtn) {
     const requiresKey = providerConfig ? providerConfig.requiresKey !== false : true;
     const apiKeyInput = document.getElementById("api-key-input");
     const apiKey = apiKeyInput?.value?.trim() || "";
+    const baseUrlInput = document.getElementById("base-url-input");
+    const baseUrl = baseUrlInput?.value?.trim() || "";
 
     if (requiresKey && !apiKey) {
       triggerInputError(apiKeyInput, "API key has not been entered.");
@@ -2897,6 +2899,7 @@ if (fetchNextBtn) {
           provider,
           model,
           apiKey,
+          baseUrl,
         }),
       });
 
@@ -3001,6 +3004,8 @@ const initProviderConfig = () => {
   const modelInputWrapper = document.getElementById("model-input-wrapper");
   const modelFieldLabel = document.getElementById("model-field-label");
   const apiKeyInput = document.getElementById("api-key-input");
+  const baseUrlInput = document.getElementById("base-url-input");
+  const baseUrlField = document.getElementById("base-url-field");
   const providerBadge = document.getElementById("provider-badge");
   const apiKeyHint = document.getElementById("api-key-hint");
   const toggleKeyBtn = document.getElementById("toggle-key-visibility");
@@ -3103,6 +3108,7 @@ const initProviderConfig = () => {
       const payload = {
         provider: providerSelect.value,
         model: getActiveModel(),
+        baseUrl: baseUrlInput?.value?.trim() || "",
       };
       localStorage.setItem("policy_llm_config", JSON.stringify(payload));
     } catch (e) {
@@ -3116,6 +3122,7 @@ const initProviderConfig = () => {
       const provider = providerSelect.value;
       const model = getActiveModel();
       const apiKey = apiKeyInput?.value?.trim() || "";
+      const baseUrl = baseUrlInput?.value?.trim() || "";
       try {
         const res = await fetch("/api/config", {
           method: "POST",
@@ -3124,6 +3131,7 @@ const initProviderConfig = () => {
             provider,
             model,
             apiKey,
+            baseUrl,
           }),
         });
         if (!res.ok) {
@@ -3146,6 +3154,8 @@ const initProviderConfig = () => {
 
     try {
       const q = new URLSearchParams({ provider: providerKey });
+      const customUrl = baseUrlInput?.value?.trim() || "";
+      if (customUrl) q.append("baseUrl", customUrl);
 
       const headers = authHeaders();
       if (apiKey) headers["X-API-Key"] = apiKey;
@@ -3192,6 +3202,7 @@ const initProviderConfig = () => {
         modelInput.value = "";
         clearInputError(modelInput);
       }
+      if (baseUrlField) baseUrlField.style.display = "none";
       updateModelMode("");
       return;
     }
@@ -3200,6 +3211,14 @@ const initProviderConfig = () => {
     if (providerBadge) providerBadge.textContent = config.badge;
     if (apiKeyHint) apiKeyHint.textContent = config.keyHint;
     if (apiKeyInput) apiKeyInput.placeholder = config.keyPlaceholder;
+
+    const isLmStudio = providerKey === "lmstudio";
+    if (baseUrlField) {
+      baseUrlField.style.display = isLmStudio ? "block" : "none";
+      if (isLmStudio && baseUrlInput && !baseUrlInput.value.trim()) {
+        baseUrlInput.value = config.baseUrl || "http://localhost:1235/v1";
+      }
+    }
 
     clearInputError(apiKeyInput);
     clearInputError(providerSelect);
@@ -3262,6 +3281,11 @@ const initProviderConfig = () => {
     syncConfigToServer();
   });
 
+  baseUrlInput?.addEventListener("input", () => {
+    saveConfigLocally();
+    syncConfigToServer();
+  });
+
   let keyDebounceTimer = null;
   apiKeyInput?.addEventListener("input", () => {
     if (apiKeyInput.value.trim()) {
@@ -3289,6 +3313,16 @@ const initProviderConfig = () => {
         return null;
       }
       return r.json();
+    })
+    .then((cfg) => {
+      if (!cfg) return;
+      if (cfg.provider) {
+        providerSelect.value = cfg.provider;
+        applyProvider(cfg.provider, true, cfg.model);
+        if (cfg.baseUrl && baseUrlInput) {
+          baseUrlInput.value = cfg.baseUrl;
+        }
+      }
     })
     .catch(() => {});
 };

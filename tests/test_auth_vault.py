@@ -50,13 +50,14 @@ async def test_key_vault_guest_and_user_storage():
 
     # User store and retrieve
     user = {"uid": "user-456", "username": "minister"}
-    res_user = await vault.put(user, {"provider": "openai", "model": "gpt-4o", "apiKey": "sk-user-secret"})
+    res_user = await vault.put(user, {"provider": "lmstudio", "model": "gpt-4o", "apiKey": "sk-user-secret", "baseUrl": "https://custom.tunnel/v1"})
     assert res_user["persisted"] is True
 
     user_val = await vault.get(user)
     assert user_val is not None
-    assert user_val["provider"] == "openai"
+    assert user_val["provider"] == "lmstudio"
     assert user_val["apiKey"] == "sk-user-secret"
+    assert user_val["baseUrl"] == "https://custom.tunnel/v1"
 
     # Delete guest
     await vault.delete(None)
