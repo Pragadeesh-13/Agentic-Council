@@ -89,8 +89,8 @@ policy-sim-local/
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Pragadeesh-13/Policy-sim-local.git
-   cd Policy-sim-local
+   git clone https://github.com/Pragadeesh-13/Agentic-Council.git
+   cd Agentic-Council
    ```
 
 2. Create and activate a virtual environment:
