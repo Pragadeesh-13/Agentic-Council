@@ -186,10 +186,8 @@ const updateMapTheme = (theme = getCurrentTheme()) => {
   if (!stateLayer || !stateLayer.eachLayer) return;
   stateLayer.eachLayer((layer) => {
     const isStateActive = layer.getElement()?.classList.contains("active");
-    const tooltipEl = layer.getTooltip()?.getElement();
     if (isStateActive) {
       layer.setStyle(getActiveStateStyle(theme));
-      tooltipEl?.classList.add("active");
       return;
     }
     const name = layer.feature?.properties?.ST_NM || layer.feature?.properties?.NAME_1 || layer.feature?.properties?.state || layer.feature?.properties?.name || "Unknown";
@@ -199,51 +197,16 @@ const updateMapTheme = (theme = getCurrentTheme()) => {
     if (impact === "positive") {
       element?.classList.add("positive");
       element?.classList.remove("negative");
-      tooltipEl?.classList.add("positive");
-      tooltipEl?.classList.remove("negative");
       layer.setStyle(getPositiveStateStyle(theme));
     } else if (impact === "negative") {
       element?.classList.add("negative");
       element?.classList.remove("positive");
-      tooltipEl?.classList.add("negative");
-      tooltipEl?.classList.remove("positive");
       layer.setStyle(getNegativeStateStyle(theme));
     } else {
       element?.classList.remove("positive", "negative");
-      tooltipEl?.classList.remove("positive", "negative");
       layer.setStyle(getBaseStateStyle(theme));
     }
   });
-};
-
-const EXCLUDED_MAP_LABEL_NAMES = new Set([
-  "lakshadweep",
-  "chandigarh",
-  "dadra and nagar haveli and daman and diu",
-  "dnh & dd",
-  "puducherry",
-]);
-
-const STATE_LABEL_CONFIG = {
-  Punjab: { lat: 31.05, lng: 75.25 },
-  Chandigarh: { hidden: true },
-  Haryana: { lat: 29.15, lng: 76.05 },
-  Delhi: { lat: 28.65, lng: 77.20, small: true },
-  "Dadra and Nagar Haveli and Daman and Diu": { hidden: true },
-  "Tamil Nadu": { lat: 11.05, lng: 78.10 },
-  Puducherry: { hidden: true },
-  Assam: { lat: 26.25, lng: 92.20 },
-  Nagaland: { lat: 26.06, lng: 94.47, small: true },
-  Tripura: { lat: 23.80, lng: 91.60, small: true },
-  Mizoram: { lat: 23.15, lng: 92.85, small: true },
-  Manipur: { lat: 24.74, lng: 93.88, small: true },
-  Meghalaya: { lat: 25.53, lng: 91.27, small: true },
-  "West Bengal": { lat: 23.35, lng: 88.05 },
-  Jharkhand: { lat: 23.65, lng: 85.35 },
-  Kerala: { lat: 10.35, lng: 76.35 },
-  Goa: { lat: 15.36, lng: 74.05, small: true },
-  Sikkim: { lat: 27.56, lng: 88.47, small: true },
-  Lakshadweep: { hidden: true },
 };
 
 const stateLayer = L.geoJSON(null, {
@@ -263,28 +226,11 @@ const stateLayer = L.geoJSON(null, {
 
     layer.on("mouseover", () => {
       layer.getElement()?.classList.add("hovered");
-      layer.getTooltip()?.getElement()?.classList.add("hovered");
     });
 
     layer.on("mouseout", () => {
       layer.getElement()?.classList.remove("hovered");
-      layer.getTooltip()?.getElement()?.classList.remove("hovered");
     });
-
-    const labelCfg = STATE_LABEL_CONFIG[name] || {};
-    if (!labelCfg.hidden && !EXCLUDED_MAP_LABEL_NAMES.has(normalized)) {
-      if (labelCfg.lat !== undefined && labelCfg.lng !== undefined) {
-        layer.getCenter = () => L.latLng(labelCfg.lat, labelCfg.lng);
-      }
-      const displayName = labelCfg.name || name;
-      const tooltipClass = labelCfg.small ? "state-label label-small" : "state-label";
-      layer.bindTooltip(displayName, {
-        permanent: true,
-        direction: "center",
-        className: tooltipClass,
-        interactive: false,
-      });
-    }
   },
 });
 
@@ -304,7 +250,6 @@ fetch(STATES_GEOJSON_URL)
       const layers = getStateLayers(stateName);
       layers.forEach((layer) => {
         const el = layer.getElement();
-        const tooltipEl = layer.getTooltip()?.getElement();
         if (el) {
           el.classList.remove("active");
           if (impact === "positive") {
@@ -313,16 +258,6 @@ fetch(STATES_GEOJSON_URL)
           } else if (impact === "negative") {
             el.classList.add("negative");
             el.classList.remove("positive");
-          }
-        }
-        if (tooltipEl) {
-          tooltipEl.classList.remove("active");
-          if (impact === "positive") {
-            tooltipEl.classList.add("positive");
-            tooltipEl.classList.remove("negative");
-          } else if (impact === "negative") {
-            tooltipEl.classList.add("negative");
-            tooltipEl.classList.remove("positive");
           }
         }
         if (impact === "positive") {
@@ -1489,12 +1424,8 @@ const clearActiveState = () => {
   if (!stateLayer || !stateLayer.eachLayer) return;
   stateLayer.eachLayer((layer) => {
     const element = layer.getElement();
-    const tooltipEl = layer.getTooltip()?.getElement();
     if (element) {
       element.classList.remove("active");
-    }
-    if (tooltipEl) {
-      tooltipEl.classList.remove("active");
     }
     const name = layer.feature?.properties?.ST_NM || layer.feature?.properties?.NAME_1 || layer.feature?.properties?.state || layer.feature?.properties?.name || "Unknown";
     const normalized = normalizeStateName(name);
@@ -1502,18 +1433,13 @@ const clearActiveState = () => {
     if (impact === "positive") {
       element?.classList.add("positive");
       element?.classList.remove("negative");
-      tooltipEl?.classList.add("positive");
-      tooltipEl?.classList.remove("negative");
       layer.setStyle(getPositiveStateStyle());
     } else if (impact === "negative") {
       element?.classList.add("negative");
       element?.classList.remove("positive");
-      tooltipEl?.classList.add("negative");
-      tooltipEl?.classList.remove("positive");
       layer.setStyle(getNegativeStateStyle());
     } else {
       element?.classList.remove("positive", "negative");
-      tooltipEl?.classList.remove("positive", "negative");
       layer.setStyle(getBaseStateStyle());
     }
   });
@@ -1536,10 +1462,6 @@ const setActiveState = (stateName) => {
     if (element) {
       element.classList.add("active");
     }
-    const tooltipEl = layer.getTooltip()?.getElement();
-    if (tooltipEl) {
-      tooltipEl.classList.add("active");
-    }
     layer.setStyle(getActiveStateStyle());
   });
 };
@@ -1552,7 +1474,6 @@ const setStateImpact = (stateName, impact) => {
   console.log(`[MAP] Found ${targets.length} layer(s) for "${normalized}"`);
   targets.forEach((layer) => {
     const el = layer.getElement();
-    const tooltipEl = layer.getTooltip()?.getElement();
     if (el) {
       el.classList.remove("active");
       if (impact === "positive") {
@@ -1563,18 +1484,6 @@ const setStateImpact = (stateName, impact) => {
         el.classList.remove("positive");
       } else {
         el.classList.remove("positive", "negative");
-      }
-    }
-    if (tooltipEl) {
-      tooltipEl.classList.remove("active");
-      if (impact === "positive") {
-        tooltipEl.classList.add("positive");
-        tooltipEl.classList.remove("negative");
-      } else if (impact === "negative") {
-        tooltipEl.classList.add("negative");
-        tooltipEl.classList.remove("positive");
-      } else {
-        tooltipEl.classList.remove("positive", "negative");
       }
     }
     if (impact === "positive") {
@@ -2517,7 +2426,6 @@ const connectLiveStream = () => {
     const data = JSON.parse(event.data);
     stateLayer.eachLayer((layer) => {
       layer.getElement()?.classList.remove("active");
-      layer.getTooltip()?.getElement()?.classList.remove("active");
       layer.setStyle(baseStateStyle);
     });
     stateImpact.clear();
@@ -2745,7 +2653,6 @@ const connectLiveStream = () => {
       if (el) {
         el.classList.remove("active", "positive", "negative");
       }
-      layer.getTooltip()?.getElement()?.classList.remove("active", "positive", "negative");
       layer.setStyle(getBaseStateStyle());
     });
     stateImpact.clear();
@@ -2885,7 +2792,6 @@ if (fetchNextBtn) {
       if (el) {
         el.classList.remove("active", "positive", "negative");
       }
-      layer.getTooltip()?.getElement()?.classList.remove("active", "positive", "negative");
       layer.setStyle(getBaseStateStyle());
     });
     stateImpact.clear();
