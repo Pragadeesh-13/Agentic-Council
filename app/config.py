@@ -37,7 +37,7 @@ def parse_allowed_origins() -> List[str]:
 
 class Settings(BaseModel):
     port: int = Field(default_factory=lambda: int(os.getenv("PORT", "3000")))
-    auth_mode: str = Field(default_factory=lambda: os.getenv("AUTH_MODE", "optional").lower())
+    auth_mode: str = Field(default_factory=lambda: os.getenv("AUTH_MODE", "required").lower())
     llm_provider: str = Field(default_factory=lambda: os.getenv("LLM_PROVIDER", "openrouter").lower())
     llm_model: str = Field(default_factory=lambda: os.getenv("LLM_MODEL", "openai/gpt-6.1-sol-pro"))
     llm_api_key: str = Field(default_factory=lambda: os.getenv("LLM_API_KEY", ""))

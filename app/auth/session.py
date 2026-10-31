@@ -51,7 +51,7 @@ class SessionGuard:
         if self._mode is not None:
             return self._mode
         from app.config import settings
-        return getattr(settings, "auth_mode", "optional").lower()
+        return getattr(settings, "auth_mode", "required").lower()
 
     def is_protected_path(self, path: str) -> bool:
         if path in PUBLIC_API_PATHS:
