@@ -4,15 +4,43 @@ Agentic Council is an asynchronous simulation platform built with Python (FastAP
 
 ---
 
-## Overview
+## Overview & Deliberation Walkthrough
 
-Agentic Council simulates a multi-agent deliberation process across five sequential rounds:
+Agentic Council simulates a multi-agent deliberation process across structured sequential rounds:
 
-1. **Round 0: Impact Declarations**: All participating state delegations assess immediate economic, fiscal, and regulatory impacts based on their unique demographics and industrial baselines.
-2. **Round 1: Opening Statements**: The most impacted states present formal opening positions, incorporating strategic policy analysis with optional streaming reasoning traces.
-3. **Round 2: Cross-Examination and Rebuttals**: Opposing state delegations engage in direct counter-arguments, citing and refuting specific delegate claims.
-4. **Round 3: Right of Reply**: The most targeted state delegation delivers a focused strategic defense and policy clarification.
-5. **Round 4: Synthesis and Economic Verdict**: The council computes regional sentiment distributions, winners and losers classifications, and national consensus metrics.
+### 1. Policy Ingestion & Configuration
+![Policy Configuration & Ingestion](assets/demo/01-policy-setup.gif)
+> **Delegation Setup**: Select cloud providers or local inference engines (e.g. LM Studio with `qwen2.5-3b`), enter unstructured policy proposals (such as the *National E20 Fuel Mandate*), and initiate automatic policy summarization and intent extraction.
+
+---
+
+### 2. Round 0: Impact Declarations
+![Round 0 Impact Declarations](assets/demo/02-round0-impact-declarations.gif)
+> **Initial Impact Declarations**: All participating state council delegations independently evaluate immediate economic, fiscal, and regulatory consequences on their primary industries, triggering real-time state highlighting on the national Leaflet map.
+
+---
+
+### 3. Round 1: Opening Statements & Moderator Selection
+![Round 1 Opening Statements](assets/demo/03-round1-opening-statements.gif)
+> **Chamber Selection**: The AI moderator reviews all state declarations, selects the top 5 most affected states for the primary deliberation chamber (benching lower-impact states), and delegates present formal opening positions in randomized speaking order.
+
+---
+
+### 4. Round 2: Cross-Examination & Streaming Reasoning
+![Round 2 Cross-Examination](assets/demo/04-round2-rebuttals-reasoning.gif)
+> **Direct Rebuttals & Reasoning**: Opposing state delegations challenge specific claims from other states (e.g. agrarian vs industrial priorities). Users can inspect real-time streaming thought processes and chain-of-thought traces as delegates formulate counter-arguments.
+
+---
+
+### 5. Round 3: Right of Reply
+![Round 3 Right of Reply](assets/demo/05-round3-right-of-reply.gif)
+> **Targeted Defense**: The moderator detects the most criticized state (Punjab) and grants it the floor for a focused strategic defense and final policy clarification.
+
+---
+
+### 6. Round 4: Synthesis, Economic Verdict & Regional Heatmap
+![Round 4 Synthesis and Economic Verdict](assets/demo/06-round4-verdict-heatmap.gif)
+> **Council Verdict & Geospatial Heatmap**: The moderator synthesizes the debate, determines winner and loser classifications, and projects a comprehensive positive (green) and negative (red) economic impact heatmap across Indian states.
 
 ---
 
