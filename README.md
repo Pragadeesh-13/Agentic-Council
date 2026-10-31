@@ -1,10 +1,16 @@
 # Agentic Council — Multi-Agent Federal Policy Deliberation Platform
 
+[![Watch Full Demo Video](https://img.shields.io/badge/YouTube-Watch%20Demo%20Video-red?style=for-the-badge&logo=youtube)](https://youtu.be/eq6kSK9gmZo)
+
 Agentic Council is an asynchronous simulation platform built with Python (FastAPI, AsyncIO, Uvicorn) that models multi-agent federal council deliberations on national public policy proposals. The system orchestrates autonomous state delegates with distinct economic profiles, regional interests, and political alignments across structured debate rounds, producing real-time streamed arguments, interactive visual maps, and quantitative economic verdicts.
+
+> 📺 **Full Video Walkthrough**: [Watch the complete 7-minute deliberation simulation on YouTube (https://youtu.be/eq6kSK9gmZo)](https://youtu.be/eq6kSK9gmZo)
 
 ---
 
 ## Overview & Deliberation Walkthrough
+
+> 🎬 **Watch the full run**: [YouTube Full Video Demo](https://youtu.be/eq6kSK9gmZo)
 
 Agentic Council simulates a multi-agent deliberation process across structured sequential rounds:
 
